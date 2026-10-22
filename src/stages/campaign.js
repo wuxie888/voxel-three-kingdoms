@@ -21,7 +21,9 @@ import { emit } from '../core/events.js';
 import { ARENA_RADIUS, WALL_Z } from '../world/world.js';
 
 const START = 210, GAP = 120, CLEAR = 170, ROAR = 34;    // frames: first goal after the intro, between goals, last goal → 勝利
-const SKIP = Number(new URLSearchParams(location.search).get('goal')) || 0;   // debug: ?goal=N starts at goal N (1-based)
+// debug: ?goal=N starts at goal N (1-based); ?boss jumps to the boss goal
+const Q = new URLSearchParams(location.search);
+const SKIP = Number(Q.get('goal')) || (Q.has('boss') ? (STAGE.script || []).findIndex((g) => g.kind === 'boss') + 1 : 0);
 
 /** A goal's (or a line's) text for this hero: [zh, en], or {heroId: [zh, en], '*': [zh, en]}. */
 export const forHero = (spec) => (Array.isArray(spec) ? spec : spec && (spec[HERO.id] || spec['*']));

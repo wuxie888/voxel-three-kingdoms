@@ -21,7 +21,7 @@ export const BOSS = {
   rage: 0.4,                                               // below this hp share: shorter wind-ups, shorter pauses
 };
 
-if (new URLSearchParams(location.search).has('boss')) BOSS.arrive = 60;   // debug: the boss rides out after 1 s
+if (new URLSearchParams(location.search).has('boss')) BOSS.arrive = 60;   // debug: the boss rides out after 1 s (stages without a script)
 
 export function createBoss(game, def) {
   const b = { def, x: 0, z: 0, y: 0, vy: 0, yaw: 0, hp: BOSS.hp, hpMax: BOSS.hp, poise: BOSS.poise, st: 'off', stT: 0,
