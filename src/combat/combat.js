@@ -8,7 +8,7 @@
 // - Launch: ≈1 s airborne with a ≈0.3 s apex float, tumbling to horizontal, one small rebound, down ≥ 2 s.
 // - Rotation in the air is planned so bodies touch down already lying (no snap on landing); juggles re-plan it.
 import { MOVES } from '../hero/moves.js';
-import { ST } from '../crowd/crowd.js';
+import { ST, CROWD } from '../crowd/crowd.js';
 import { emit } from '../core/events.js';
 import { hash01 } from '../core/rng.js';
 import { ARENA_RADIUS } from '../world/world.js';
@@ -27,7 +27,7 @@ export const COMBAT = {
   launchMaxV: 2.5,                      // radial (circle) launchers: bodies go up, not out at the camera
   heavyBlow: [0.65, 1.2],               // hero finishers: horizontal × 0.65, lift × 1.2 → thrown 2-3 H
   juggleY: 2.4,                         // juggled bodies hover around 1.2-1.6 H instead of climbing
-  musouPerHit: 0.3, musouPerKO: 0.55,   // musou part r3: one Musou now spends one of 3 segments, so a segment fills at the old whole-bar rate (≈ 90 hits)
+  musouPerHit: 0.1, musouPerKO: 0.18,   // one Musou spends one of 3 segments: ≈ 4 per battle from fighting; 酒 adds a segment
   // flinch: the victim snaps round to face the blow and stumbles back ≈ 0.3 H (force 3) with its arms thrown up
   // (pose: hitfx.js recoilPose); a grunt hit by a 'push' is knocked flat on its back, floor in ≈ 12 sf
   flinchKick: 1.6, flinchDamp: 0.85, knockLift: 1.7, knockK: 0.7,
@@ -49,7 +49,7 @@ export function createCombat(game) {
   let lastTick = -1;                                         // a move frame is resolved once, even across hitstop
   let heavyKey = null;                                       // window that already paid its heavy hitstop
   let sweepKey = null;                                       // combo-system r4: sweep window that already paid its hitstop
-  cb.reset = () => { lastTick = -1; heavyKey = null; sweepKey = null; projs.length = 0; };
+  cb.reset = () => { lastTick = -1; heavyKey = null; sweepKey = null; projs.length = 0; guardN.fill(0); guardOff.fill(0); chainN.fill(0); chainF.fill(0); };
 
   /** Is enemy i inside `hit` cast from (ox, oz) facing yaw? */
   function inShape(i, hit, ox, oz, yaw) {
@@ -102,9 +102,11 @@ export function createCombat(game) {
       if (applyHit(i, hit, ox, oz, yaw, moveId)) kos++;
       victims[count++] = i; sx += c.x[i]; sy += c.y[i]; sz += c.z[i];
     }
+    // jars and supply crates on the field break under any hero blow (supplies/supplies.js)
+    if (game.supplies) game.supplies.strike((x, z) => pointIn(x, 0.4, z, 0.4, hit, ox, oz, yaw));
     // the boss (boss.js) is struck by the same windows; he counts toward the hit total but takes no crowd reaction
     const B = game.boss;
-    if (B && B.alive() && (rehit || B.lastHit !== key) && pointIn(B.x, B.y, B.z, 0.75, hit, ox, oz, yaw)) {
+    if (B && B.alive() && (rehit || B.lastHit !== key) && pointIn(B.x, B.y, B.z, 1.0, hit, ox, oz, yaw)) {   // he stands 1.2× tall
       B.lastHit = key; B.hurt(hit, ox, oz, moveId);
       count++; sx += B.x; sy += B.y; sz += B.z;
     }
@@ -144,9 +146,47 @@ export function createCombat(game) {
     c.spinV[i] = spin;
   }
 
+  // Officers guard (DW): a light attack from the front is blocked — a clank, no damage, the chain does not count — while
+  // they stand ready. Charges, heavy finishers, the Musou and the ally's roar always land; so does anything from the
+  // side or behind, or while they swing or reel. The third block in a row breaks the guard (the blow lands and the
+  // guard stays down for 1.5 s). Chance per hit: difficulty `guard`.
+  const guardN = new Int32Array(game.crowd.N), guardOff = new Int32Array(game.crowd.N);
+  function guarded(i, hit, ox, oz, moveId) {
+    const c = game.crowd, s = c.st[i];
+    if (hit.heavy || !MOVES[moveId] || moveId[0] === 'c' || game.frame < guardOff[i]) return false;
+    if (s !== ST.IDLE && s !== ST.ADVANCE && s !== ST.GUARD) return false;
+    let a = Math.atan2(ox - c.x[i], oz - c.z[i]) - c.yaw[i]; a = Math.atan2(Math.sin(a), Math.cos(a));
+    if (Math.abs(a) > 1.2 || hash01(i, game.frame, 17) >= (game.diff?.guard ?? 0.5)) { guardN[i] = 0; return false; }
+    if (++guardN[i] >= 3) { guardN[i] = 0; guardOff[i] = game.frame + 90; emit('guard:break', { i, x: c.x[i], y: c.y[i] + 1.4, z: c.z[i] }); return false; }
+    c.cd[i] = 0;                                               // and answers at once
+    emit('block', { i, x: c.x[i], y: c.y[i] + 1.3, z: c.z[i] });
+    return true;
+  }
+  // Officers break out of a held chain (DW): once a chain (hits under 2.5 s apart) has taken `breakout` of his health
+  // (difficulty), an officer shrugs the reaction off and swings straight back — a quick 0.25 s wind-up — with armour for
+  // 1.3 s (blows still hurt, they no longer stagger him). A combo has to make room or be answered.
+  const chainN = new Float64Array(game.crowd.N), chainF = new Int32Array(game.crowd.N);
+  function breakout(i, dmg) {
+    const c = game.crowd;
+    if (game.frame - chainF[i] > 150) chainN[i] = 0;
+    chainF[i] = game.frame;
+    if ((chainN[i] += dmg) < c.hpMax[i] * (game.diff?.breakout ?? 0.24)) return false;
+    chainN[i] = 0;
+    c.armorF[i] = game.frame + 80;
+    c.st[i] = ST.ATTACK; c.stT[i] = CROWD.windup - 15; c.wind[i] = 1; c.feint[i] = 0; c.cd[i] = 0;
+    c.vx[i] = c.vz[i] = c.vy[i] = 0; c.y[i] = 0; c.rx[i] = 0;
+    c.yaw[i] = Math.atan2(game.hero.x - c.x[i], game.hero.z - c.z[i]);
+    emit('officer:break', { i, x: c.x[i], y: 1.4, z: c.z[i] });
+    return true;
+  }
+  /** The hero's damage multiplier: the stage buff (青釭劍) × the 虎符 supply (attack ×2 while it lasts). */
+  const atkK = (h) => (h.atk || 1) * (h.buffAtk > 0 ? 2 : 1);
+  cb.atkK = atkK;
+
   function applyHit(i, hit, ox, oz, yaw, moveId) {
     const c = game.crowd, h = game.hero;
     const officer = c.type[i] === 1;
+    if (officer && guarded(i, hit, ox, oz, moveId)) return false;
     // push direction: radial from the attacker, biased along the attack facing for thrusts
     let dx = c.x[i] - ox, dz = c.z[i] - oz;
     const l = Math.hypot(dx, dz) || 1;
@@ -154,7 +194,7 @@ export function createCombat(game) {
     if (hit.shape === 'line') { dx = dx * 0.35 + Math.sin(yaw) * 0.65; dz = dz * 0.35 + Math.cos(yaw) * 0.65; }
     const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
 
-    c.hp[i] -= hit.dmg * (h.atk || 1);
+    c.hp[i] -= hit.dmg * atkK(h);
     // hot silhouette only on a fresh contact (hitfx.js); rapid re-hits (multi-hit moves, juggles) just refresh the tint.
     // Heavy hits tint 3 sf longer and deeper (amber).
     c.flash[i] = c.flash[i] > COMBAT.tintFrames / 2 ? COMBAT.tintFrames - 2 : COMBAT.tintFrames + (hit.heavy ? 3 : 0);
@@ -162,6 +202,8 @@ export function createCombat(game) {
     game.crowd.releaseToken(i);
     let kb = hit.kb, force = hit.force || 0, lift = hit.lift || 0;
     const killed = c.hp[i] <= 0 && !c.kod[i];
+    // an armoured officer (breakout) takes the damage without reacting; a long chain sets one off
+    const armoured = officer && !killed && (game.frame < c.armorF[i] || (MOVES[moveId] && breakout(i, hit.dmg * atkK(h))));
     const s0 = c.st[i], air = s0 === ST.AIR, downed = s0 === ST.DOWN || s0 === ST.GETUP;
     if (officer && !hit.heavy && !killed) { if (kb === 'launch' || kb === 'blow' || kb === 'spin') kb = 'push'; force *= 0.4; }
     let koThrow = false;
@@ -181,7 +223,8 @@ export function createCombat(game) {
       bx = dx * (1 - k) + cz * s * k; bz = dz * (1 - k) - cx * s * k;
       const bl = Math.hypot(bx, bz) || 1; bx /= bl; bz /= bl;
     }
-    if (air) {                                                 // juggle: every hit re-pops the body and re-plans its tumble
+    if (armoured) {                                            // no reaction: he keeps his feet and his swing
+    } else if (air) {                                          // juggle: every hit re-pops the body and re-plans its tumble
       const ceil = Math.min(1, Math.max(0.25, 1 - (c.y[i] - COMBAT.juggleY) / 1.2));   // pops weaken above juggleY
       const vy = Math.max(c.vy[i], (lift ? lift * 0.8 : 4.2) * ceil);
       airborne(i, vy, Math.max(1.2, force * 0.5), dx, dz, floaty[i] || kb === 'launch', 0.6, c.spinV[i] * 0.6 + sgn * 1.5);
@@ -268,7 +311,7 @@ export function createCombat(game) {
   cb.launch = (hit, move = 'musou') => launch(hit, game.hero, -1, move);
   function launch(hit, h, w, move = h.move) {
     const p = hit.proj, n = p.count || 1, spread = (p.spread || 0) * Math.PI / 180, kind = p.kind || (p.spread >= 360 ? 'ring' : 'wind');
-    const strikeHit = { ...hit, proj: undefined, shape: 'circle', range: p.r };
+    const strikeHit = { ...hit, proj: undefined, shape: 'circle', range: p.r, fromProj: true };
     for (let k = 0; k < n; k++) {
       const yaw = h.yaw + (n > 1 ? (spread >= 2 * Math.PI - 1e-3 ? (k / n) * spread : (k / (n - 1) - 0.5) * spread) : 0);
       projs.push({ x: h.x + Math.sin(yaw) * 0.9, z: h.z + Math.cos(yaw) * 0.9, y: h.y + (p.y ?? 1.1), yaw, v: p.speed / 60, life: p.life,
@@ -357,7 +400,7 @@ export function createCombat(game) {
     if (d > (officer ? 2.3 : 1.9) || h.y > 1.2) return;
     let a = Math.atan2(dx, dz) - c.yaw[i]; a = Math.atan2(Math.sin(a), Math.cos(a));
     if (Math.abs(a) > 1.1) return;
-    h.hurt(officer ? 22 : 10, c.x[i], c.z[i], officer);
+    h.hurt(officer ? CROWD.officerDmg : CROWD.dmg, c.x[i], c.z[i], officer);
   };
 
   cb.step = () => {

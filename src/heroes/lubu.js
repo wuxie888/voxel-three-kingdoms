@@ -267,6 +267,7 @@ export default {
   },
   face: FACE, pal: PAL,
   style: STYLE,
+  power: 0.88,                // × damage of his whole moveset (hero balance: still the strongest, no longer by 80 %)
   voice: { pitch: 0.84, fk: 0.92, growl: 0.2, gain: 1.1 },   // low, imperious
   moveset: MOVESET,
   build: () => ({ parts: limbs(torso()), head: head(), hv: HV, bv: FV, pauldrons: pauldronBoxes, weapon: weaponGeo() }),

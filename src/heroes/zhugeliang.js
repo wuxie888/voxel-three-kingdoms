@@ -242,6 +242,7 @@ export default {
   },
   face: FACE, pal: PAL,
   style: STYLE,
+  power: 0.85,                // × damage of his whole moveset (hero balance: his fan strikes from range)
   voice: { pitch: 0.98, fk: 1.02, growl: -0.12, gain: 0.85 },   // calm, clear
   moveset: MOVESET,
   anim: 'fan',                                              // one-handed fan upper body (hero/anims/fan.js)

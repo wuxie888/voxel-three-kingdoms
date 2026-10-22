@@ -12,23 +12,24 @@ import { emit } from '../core/events.js';
 import { ARENA_RADIUS, GATE_X } from '../world/world.js';
 
 export const BOSS = {
-  hp: 4200, poise: 380, staggerF: 62, arrive: 60 * 22, arriveKOs: 45,
+  hp: 2800, poise: 320, staggerF: 84, arrive: 60 * 22, arriveKOs: 45,   // a 1.5-2.5 min duel; a broken guard opens 1.4 s
   walk: 3.2, run: 6.4, turn: 5, range: 3.4,
   // [windup, active, recover] frames, damage, reach
-  sweep: { f: [34, 28, 30], dmg: 36, r: 3.9, every: 9 },
-  thrust: { f: [28, 12, 34], dmg: 44, len: 7.5, w: 2.2, lunge: 5.5 },
-  leap: { f: [22, 36, 40], dmg: 54, r: 4.4 },
+  sweep: { f: [34, 28, 30], dmg: 26, r: 3.9, every: 9 },
+  thrust: { f: [28, 12, 34], dmg: 32, len: 7.5, w: 2.2, lunge: 5.5 },
+  leap: { f: [22, 36, 40], dmg: 40, r: 4.4 },
+  poiseHit: 9, steady: 150, projK: 0.6,                    // poise: + per hit (fast strings stagger too); no stagger for 2.5 s after one; thrown blades ×0.6
   rage: 0.4,                                               // below this hp share: shorter wind-ups, shorter pauses
 };
 
 if (new URLSearchParams(location.search).has('boss')) BOSS.arrive = 60;   // debug: the boss rides out after 1 s (stages without a script)
 
 export function createBoss(game, def) {
-  const b = { def, x: 0, z: 0, y: 0, vy: 0, yaw: 0, hp: BOSS.hp, hpMax: BOSS.hp, poise: BOSS.poise, st: 'off', stT: 0,
+  const b = { def, x: 0, z: 0, y: 0, vy: 0, yaw: 0, hp: BOSS.hp, hpMax: BOSS.hp, poise: BOSS.poise, steady: 0, st: 'off', stT: 0,
     atk: null, ax: 0, az: 0, pause: 0, lastHit: -1, flash: 0, seq: 0, anim: { id: 'idle', t: 0 } };
   const h = game.hero;
 
-  b.reset = () => Object.assign(b, { st: 'off', stT: 0, hp: BOSS.hp * (game.diff?.hp ?? 1), hpMax: BOSS.hp * (game.diff?.hp ?? 1), poise: BOSS.poise, atk: null, y: 0, vy: 0, pause: 0, lastHit: -1, flash: 0,
+  b.reset = () => Object.assign(b, { st: 'off', stT: 0, hp: BOSS.hp * (game.diff?.hp ?? 1), hpMax: BOSS.hp * (game.diff?.hp ?? 1), poise: BOSS.poise, steady: 0, atk: null, y: 0, vy: 0, pause: 0, lastHit: -1, flash: 0,
     x: GATE_X * 0.5, z: ARENA_RADIUS + 10, yaw: Math.PI });           // rides in from the gate side, just out of the arena
   b.alive = () => b.st !== 'off' && b.st !== 'dead';
   /** Ride out now (stage scripts call this when his goal starts; without one he comes on his own, below). */
@@ -44,15 +45,15 @@ export function createBoss(game, def) {
   /** Called by combat.strike when a hero hit window covers him. */
   b.hurt = (hit, ox, oz, moveId) => {
     const musou = moveId === 'musou';
-    b.hp = Math.max(0, b.hp - hit.dmg * (h.atk || 1));
+    b.hp = Math.max(0, b.hp - hit.dmg * game.combat.atkK(h) * (hit.fromProj ? BOSS.projK : 1));
     b.flash = 6;
     h.combo++; h.comboT = 90;
     if (h.state !== 'musou') h.musou = Math.min(h.musouMax, h.musou + 0.3);
     emit('hit', { i: -1, x: b.x, y: b.y + 1.6, z: b.z, dx: 0, dz: 0, dmg: hit.dmg, kb: 'flinch', move: moveId, combo: h.combo, killed: false, officer: false, heavy: !!hit.heavy });
     emit('boss:hit', { x: b.x, y: b.y + 1.6, z: b.z, dmg: hit.dmg, heavy: !!hit.heavy });
     if (b.hp <= 0) { set('dead'); b.atk = null; h.kos++; emit('boss:defeat', { x: b.x, z: b.z, name: def.zh }); return; }
-    if (b.st === 'stagger' || b.st === 'enter') return;
-    b.poise -= hit.dmg * (hit.heavy ? 1.6 : 1) * (musou ? 0.5 : 1);
+    if (b.st === 'stagger' || b.st === 'enter' || b.steady > 0) return;
+    b.poise -= (hit.dmg * (hit.heavy ? 1.6 : 1) + BOSS.poiseHit) * (musou ? 0.5 : 1);
     if (b.poise <= 0) { b.poise = BOSS.poise; b.atk = null; b.y = 0; b.vy = 0; set('stagger'); emit('boss:stagger', { x: b.x, z: b.z }); }
   };
 
@@ -87,6 +88,7 @@ export function createBoss(game, def) {
     }
     if (game.hitstop > 0) return;
     b.stT++;
+    if (b.steady > 0) b.steady--;
     const t = b.stT;
     switch (b.st) {
       case 'enter':                                        // march out of the gate toward the arena
@@ -117,11 +119,11 @@ export function createBoss(game, def) {
             if ((t - A.w) % 4 === 1) strikeHero('thrust');
           }
         } else if (t > A.w && t <= A.w + A.a && (t - A.w - 1) % S.every === 0) strikeHero('sweep');
-        if (t >= A.w + A.a + A.r) { b.atk = null; b.pause = b.rage() ? 20 : 45 + Math.round(rng.next() * 40); set('chase'); }
+        if (t >= A.w + A.a + A.r) { b.atk = null; b.pause = b.rage() ? 30 : 60 + Math.round(rng.next() * 40); set('chase'); }   // room to strike back
         break;
       }
       case 'stagger':
-        if (t >= BOSS.staggerF) set('chase');
+        if (t >= BOSS.staggerF) { set('chase'); b.steady = BOSS.steady; }   // back on his feet: no stagger for a while
         break;
       default: break;
     }

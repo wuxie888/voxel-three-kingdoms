@@ -167,6 +167,8 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 export const BASE_MOVES = finalizeMoves(clone(SPEAR));
 /** The active hero's moveset: his own table (hero def `moveset.moves()`), else the spear set rescaled by his style. */
 export const MOVES = HERO.moveset ? finalizeMoves(HERO.moveset.moves()) : finalizeMoves(clone(SPEAR), HERO.style);
+// hero balance: `power` scales every hit of his set (heroes/*.js), so the five land within reach of each other
+if (HERO.power) for (const m of Object.values(MOVES)) for (const h of m.hits) h.dmg = Math.round(h.dmg * HERO.power);
 
 /** Clip sample for move frame t → [clipId, normalised clip time, segment]. Pure, used by the hero's anim bookkeeping. */
 export function moveClip(m, t) {

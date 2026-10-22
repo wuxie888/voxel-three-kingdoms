@@ -23,7 +23,8 @@ import { STAGE, STAGES } from './stages/index.js';
 import { createBoss } from './boss/boss.js';
 import { createBossView } from './boss/view.js';
 import { createAudio } from './audio/audio.js';
-import { createPickups } from './ui/pickups.js';
+import { createSupplies } from './supplies/supplies.js';
+import { createSuppliesView } from './supplies/view.js';
 import { on } from './core/events.js';
 import { createCampaign } from './stages/campaign.js';
 import { createProps } from './stages/props.js';
@@ -58,7 +59,7 @@ game.boss = bossCfg ? createBoss(game, HEROES.find((h) => h.id === bossCfg.id)) 
 game.campaign = createCampaign(game);   // the battle's goals (STAGE.script): officers, spots to take, the boss → 勝利
 const input = createInput();
 const touch = createTouch(input, game, { onPause: () => setPaused(true) });   // phones / tablets: stick + buttons
-const pickups = createPickups(game, scene);   // meat buns: heal on pickup (ui/pickups.js)
+game.supplies = createSupplies(game);         // jars / crates on the field, food, wine, 虎符, 玄甲 (supplies/supplies.js)
 if (params.has('debug') || params.has('rec')) Object.assign(window, { game, scene });   // debug: inspect sim state from the console
 
 // ---- render side
@@ -71,6 +72,7 @@ const chargeFx = HERO.anim === 'fan' ? null : createChargeFx(scene, game, camRig
 const bossView = game.boss ? createBossView(scene, game, vfx, { bossIntro: bossCfg.intro }) : null;
 const musouView = createMusouView(scene, game, camRig.camera);   // musou part: grade, dragon, cut-in (render-only)
 const props = createProps(scene, game, vfx, camRig.camera);                      // goal beacons, the bundle by the well, fire ships, the ally
+const suppliesView = createSuppliesView(scene, game, vfx);
 // hud part: camera passed so officer name/HP tags can be projected over their heads (read-only)
 const hud = createHud(document.getElementById('hud'), game, { camera: camRig.camera });
 createAudio(game);
@@ -95,7 +97,7 @@ function step() {
   game.hero.step(inp);
   game.combat.step();
   game.crowd.step();
-  pickups.step();
+  game.supplies.step();
   if (game.boss) game.boss.step();
   game.campaign.step();
   game.musou.step();
@@ -111,7 +113,7 @@ function render() {
   crowdView.update(dt);
   vfx.update(dt);
   sigFx.update(dt);
-  pickups.update();
+  suppliesView.update();
   if (chargeFx) chargeFx.update(dt);
   if (bossView) bossView.update(dt);
   props.update(dt);

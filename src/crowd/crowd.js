@@ -39,9 +39,9 @@ export const CROWD = {
   aggro: 9, officerAggro: 16,
   tokens: 3, attackRange: 1.7, maxStrikers: 2,               // ≤ 3 committed step in, ≤ 2 of them winding up at once
   strikeGap: [[40, 90], [30, 80]],                            // next start after 40-90 sf (hero calm) / 30-80 (he attacks)
-  grace: [150, 240], rally: [3, 5], rallyTime: 44,             // feints for 2.5-4 s after a blow lands; guards raising
+  grace: [90, 150], rally: [3, 5], rallyTime: 44,              // feints for 1.5-2.5 s after a blow lands (× difficulty); guards raising
   windup: 40, strike: 40, recover: 24, cooldown: [110, 260], officerCd: [40, 90],  // strike lands 0.67 s after wind-up starts
-  dmg: 10, officerDmg: 22, hp: 30, captainHp: 80, officerHp: 520,
+  dmg: 11, officerDmg: 28, hp: 30, captainHp: 80, officerHp: 520,
   deadTime: 210, fieldR: 62,
   engaged: 84, transit: 72,                                   // director target: soldiers on the hero; cap on blocks en route
   halt: 15, haltFrames: 36, fold: 7.5,                        // squad: halt at 15 m, then charge, fold at 7.5 m
@@ -63,6 +63,7 @@ export function createCrowd(game, grunts = 300) {
     squad: I(), slotX: F(), slotZ: F(), form: I(),
     sq: { x: F(MAXSQ), z: F(MAXSQ), face: F(MAXSQ), st: I(MAXSQ), t: I(MAXSQ), n: 0 },
     raiseF: I(), feint: I(), wind: I(),                         // raiseF: rallying until (render + ring surge); feint strike; winding up
+    armorF: I(),                                                // officers: armoured (no stagger) until this frame (combat breakout)
     waveT: 0, tokensUsed: 0, strikeF: 0, gap: 0, graceF: 0, heroHp: 0, wavesOn: false, engaged: 0,
   };
   const head = new Int32Array(GRID * GRID), next = new Int32Array(N);
@@ -78,7 +79,7 @@ export function createCrowd(game, grunts = 300) {
     c.type[i] = off ? 1 : 0; c.kind[i] = kind;
     c.hpMax[i] = c.hp[i] = off ? CROWD.officerHp * (game.diff?.hp ?? 1) : kind === KIND.CAPTAIN ? CROWD.captainHp : CROWD.hp;
     c.st[i] = engaged ? ST.ADVANCE : ST.IDLE; c.stT[i] = rng.int(0, 60);
-    c.token[i] = 0; c.cd[i] = rng.int(0, 120); c.hs[i] = 0; c.flash[i] = 0; c.raiseF[i] = 0; c.feint[i] = 0; c.wind[i] = 0;
+    c.token[i] = 0; c.cd[i] = rng.int(0, 120); c.hs[i] = 0; c.flash[i] = 0; c.raiseF[i] = 0; c.feint[i] = 0; c.wind[i] = 0; c.armorF[i] = 0;
     c.rx[i] = c.rxV[i] = c.spinV[i] = 0; c.bounce[i] = 0; c.lastHit[i] = -1; c.kod[i] = 0;
     const r = rng.next();
     if (kind === KIND.BEARER) { c.band[i] = 2; c.pref[i] = rng.range(7, 11); }
@@ -220,7 +221,7 @@ export function createCrowd(game, grunts = 300) {
     if (game.freeze > 0) game.freeze--;
     if (!frozen) squads(h);
     // a blow landed: the next strikes are feints for a while (the ring threatens, the hero keeps fighting)
-    if (h.hp < c.heroHp) c.graceF = game.frame + rng.int(CROWD.grace[0], CROWD.grace[1]);
+    if (h.hp < c.heroHp) c.graceF = game.frame + Math.round(rng.int(CROWD.grace[0], CROWD.grace[1]) * (game.diff?.grace ?? 1));
     c.heroHp = h.hp;
     let strikers = 0;
     for (let i = 0; i < N; i++) if (c.st[i] === ST.ATTACK && c.stT[i] < CROWD.strike) strikers++;
@@ -329,7 +330,8 @@ export function createCrowd(game, grunts = 300) {
         }
         // token holder within a step of reach swings when the strike clock allows (officers at half the gap); the
         // wind-up closes the last metre
-        if (c.token[i] && d <= CROWD.attackRange + 0.9 && c.cd[i] === 0 && !h.y && strikers < CROWD.maxStrikers &&
+        // while the boss is on the field the ring keeps to one striker at a time: the duel is with him
+        if (c.token[i] && d <= CROWD.attackRange + 0.9 && c.cd[i] === 0 && !h.y && strikers < (game.boss?.alive() ? 1 : CROWD.maxStrikers) &&
             h.state !== 'hurt' && game.frame - c.strikeF >= (c.type[i] ? c.gap >> 1 : c.gap)) {
           setSt(i, ST.ATTACK); c.wind[i] = 1; c.feint[i] = game.frame < c.graceF ? 1 : 0; strikers++;
           const g = CROWD.strikeGap[busy ? 1 : 0], gk = game.diff?.gap ?? 1;

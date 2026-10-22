@@ -36,7 +36,7 @@ export function createHero(game) {
     hp: 400, hpMax: 400, musou: 0, musouMax: 100,
     state: 'idle', stateT: 0, move: null, moveT: 0, moveSeq: 0,
     grounded: true, airAttack: false, iframes: 0, speed: 0, runT: 0, runPhase: 0,
-    combo: 0, comboT: 0, kos: 0, atk: 1, taken: 0,
+    combo: 0, comboT: 0, kos: 0, atk: 1, taken: 0, buffAtk: 0, buffDef: 0, hurtF: -99,   // buffs: frames left (supplies/supplies.js)
     buf: null, bufT: 0, dodgeBuf: 0, jumpBuf: 0, musouBuf: 0, dodgeX: 0, dodgeZ: 1,
     musouClip: null, musouT: 0,
     airN: 0, moveAir: false,                                  // combo-system: air-string count, vault
@@ -51,23 +51,27 @@ export function createHero(game) {
   h.reset = ({ x = 0, z = 0, yaw = 0 } = {}) => {
     Object.assign(h, { x, y: 0, z, vx: 0, vy: 0, vz: 0, yaw, hp: h.hpMax, musou: 0, state: 'idle', stateT: 0, move: null,
       moveT: 0, moveSeq: 0, grounded: true, airAttack: false, iframes: 0, speed: 0, runT: 0, runPhase: 0, combo: 0, comboT: 0,
-      kos: 0, atk: 1, taken: 0, buf: null, bufT: 0, dodgeBuf: 0, jumpBuf: 0, musouBuf: 0, musouClip: null, musouT: 0,
+      kos: 0, atk: 1, taken: 0, buffAtk: 0, buffDef: 0, hurtF: -99, buf: null, bufT: 0, dodgeBuf: 0, jumpBuf: 0, musouBuf: 0, musouClip: null, musouT: 0,
       airN: 0, moveAir: false, dodgeSeq: 0 });
     Object.assign(h.anim, { id: 'idle', t: 0, k: 0, seq: -1, pid: null, pt: 0, pk: 0, blendF: 1, blendN: 1, yaw, lean: 0, fx: x, fz: z, px: x, pz: z, mf: null, mt: 0, om: null, ot: 0 });
   };
 
-  /** Heal (meat buns, ui/pickups.js). */
+  /** Heal (food, supplies/supplies.js). */
   h.heal = (v) => { if (h.state !== 'dead') { h.hp = Math.min(h.hpMax, h.hp + v); emit('hero:heal', { v, hp: h.hp, x: h.x, z: h.z }); } };
 
-  /** Called by combat when an enemy strike connects. Any attack move armours against grunts; officers need `armor`. */
+  /** Called by combat when an enemy strike connects. Only moves with `armor` (charges, finishers, Lü Bu's string) keep
+   *  going through a blow; any other move is knocked out of his hands — the ring is a threat, not scenery. */
   h.hurt = (dmg, fromX, fromZ, officer) => {
     if (h.iframes > 0 || h.state === 'musou' || h.state === 'dodge') return false;
     if (h.state === 'dead') return false;
-    dmg = Math.round(dmg * (game.diff?.dmg ?? 1));            // difficulty (main.js DIFFS)
+    // a blow taken through armour still buys 0.4 s: a multi-tick strike (the boss's sweep) lands once, not four times
+    if (game.frame - h.hurtF < 24) return false;
+    h.hurtF = game.frame;
+    dmg = Math.round(dmg * (game.diff?.dmg ?? 1) * (h.buffDef > 0 ? 0.5 : 1));   // difficulty (core/settings.js), 玄甲 halves it
     h.taken += Math.min(dmg, h.hp);
     h.hp = Math.max(0, h.hp - dmg);
     h.musou = Math.min(h.musouMax, h.musou + dmg * 0.15);
-    const armored = h.hp > 0 && !!h.move && (!officer || MOVES[h.move].armor);
+    const armored = h.hp > 0 && !!h.move && !!MOVES[h.move].armor;
     emit('hero:hurt', { dmg, hp: h.hp, x: h.x, y: h.y + 1.2, z: h.z, armored });
     if (h.hp <= 0) {                                         // 戰死: falls, the sim keeps running, main.js shows the result
       h.move = null; setState(h, 'dead'); h.vx = h.vz = 0; h.combo = 0;

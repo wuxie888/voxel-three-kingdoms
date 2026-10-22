@@ -117,7 +117,10 @@ export function createSignatureFx(scene, game, vfx, camera) {
       fx.ring(x, z, r, 0.6, rgb(c, 0.9)); fx.embers(x, 0.6, z, 30, 1.6, rgb(c)); fx.star(x, 1.4, z, 2, 0.4, rgb(k, 0.8));
     }
   });
-  on('pickup', (e) => { fx.ring(e.x, e.z, 1.6, 0.4, [0.6, 2.0, 0.8]); fx.star(e.x, 1.0, e.z, 1.4, 0.3, [1.0, 2.2, 1.2]); fx.embers(e.x, 0.4, e.z, 16, 0.6, [0.8, 2.0, 0.9]); });
+  // an officer's guard: a white-hot clash on the block, a burst and a ring when the third block breaks it
+  on('block', (e) => { fx.star(e.x, e.y, e.z, 0.9, 0.12, [2.4, 2.3, 2.0]); fx.embers(e.x, e.y, e.z, 6, 0.4, [2.2, 1.8, 1.2]); });
+  on('officer:break', (e) => { fx.ring(e.x, e.z, 3.2, 0.4, [2.4, 0.5, 0.25]); fx.star(e.x, e.y, e.z, 1.8, 0.3, [2.4, 0.6, 0.3]); fx.dustRing(e.x, e.z, 12, 0.5, 4, 0.45, 0.5); });
+  on('guard:break', (e) => { fx.star(e.x, e.y, e.z, 2.0, 0.25, [2.4, 2.0, 1.0]); fx.ring(e.x, e.z, 2.6, 0.35, [2.2, 1.8, 0.8]); fx.flash(0.06); });
   on('proj:launch', (e) => fx.star(e.x + Math.sin(e.yaw) * 0.8, e.y, e.z + Math.cos(e.yaw) * 0.8, 0.9, 0.14, rgb(FX.core)));
 
   let t = 0;

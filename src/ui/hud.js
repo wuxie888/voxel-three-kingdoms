@@ -10,6 +10,7 @@ import { on } from '../core/events.js';
 import { HERO, HEROES } from '../heroes/index.js';
 import { STAGE } from '../stages/index.js';
 import { forHero } from '../stages/campaign.js';
+import { ITEMS, BUFF } from '../supplies/supplies.js';
 import { ST } from '../crowd/crowd.js';
 import { ARENA_RADIUS, WALL_Z, GATE_X } from '../world/world.js';
 
@@ -41,6 +42,8 @@ export function createHud(root, game, { camera = null } = {}) {
     <div class="h-player"><div class="badge"><canvas width="20" height="20"></canvas></div><div class="name">${HERO.zh}</div>
       <div class="bar hp"><em></em><i></i></div>
       <div class="mu"><div><i></i></div><div><i></i></div><div><i></i></div><span>無雙</span></div></div>
+    <div class="h-buffs"><div class="bf atk"><b>虎符</b><span>攻×2</span><i></i></div><div class="bf def"><b>玄甲</b><span>防×2</span><i></i></div></div>
+    <div class="h-toast"><b></b><small></small></div>
     <div class="h-ko"><div class="num"><b class="dig" data-t="0"><span>0</span></b><u></u></div><small><em>擊破</em>K.O. COUNT</small></div>`;
   const $ = (s) => root.querySelector(s), $$ = (s) => [...root.querySelectorAll(s)];
   const intro = $('.h-intro'), player = $('.h-player'), hpI = $('.hp i'), hpE = $('.hp em'), muSeg = $$('.mu i'), mu = $('.mu');
@@ -50,6 +53,8 @@ export function createHud(root, game, { camera = null } = {}) {
   const band = $('.h-band'), bandP = $('.h-band p'), bandS = $('.h-band small');
   const dlg = $('.h-dlg'), dlgP = $('.h-dlg p'), dlgS = $('.h-dlg small'), copy = $('.h-copy');
   const dlgCv = $('.h-dlg canvas'), dlgSeal = $('.h-dlg .seal'), dlgName = $('.h-dlg b em'), dlgEn = $('.h-dlg b span');
+  const buffs = [['buffAtk', $('.bf.atk')], ['buffDef', $('.bf.def')]].map(([k, el]) => ({ k, el, bar: el.querySelector('i') }));
+  const toast = $('.h-toast'), toastB = $('.h-toast b'), toastS = $('.h-toast small');
   const goalEl = $('.h-goal'), goalB = $('.h-goal b'), goalS = $('.h-goal small'), goalPg = $('.h-goal .pg'), goalCap = $('.h-goal .cap'), goalCapI = $('.h-goal .cap i');
   const ways = $$('.h-ways .way').map((el) => ({ el, i: el.querySelector('i'), b: el.querySelector('b'), sp: el.querySelector('span') }));
   const target = $('.h-target'), targetB = $('.h-target b'), targetS = $('.h-target span'), targetI = $('.h-target .bar i'), targetE = $('.h-target .bar em');
@@ -85,7 +90,7 @@ export function createHud(root, game, { camera = null } = {}) {
   const reset = () => Object.assign(S, {
     lastCombo: 0, shownChain: 0, chainF: -99, chainQ: [], ghostN: 0, shownKo: 0, koF: -99, mile: 0, mileF: -99, mileTop: 33, mileDim: 1,
     lagHp: 1, lastF: 0, hurtF: -99, actF: 0, band: null, bandQ: [], dlg: null, waveF: -999, tgt: -1, tgtF: -999, tgtKoF: -999,
-    musouF: -999, musouEnd: -999, waves: [], introCut: 0, dlgQ: [], goalI: -2, goalF: -999,
+    musouF: -999, musouEnd: -999, waves: [], introCut: 0, dlgQ: [], goalI: -2, goalF: -999, toastF: -999,
   });
   reset();
   // heavy numerals: the rim layer (::before) reads data-t, the gradient face is the inner span
@@ -104,6 +109,12 @@ export function createHud(root, game, { camera = null } = {}) {
   on('goal:progress', (e) => { if (e.goal === undefined && cp?.goal?.kind === 'reach' && cp.of > 1) banner(`${cp.goal.label} <em>${e.n} / ${e.of}</em>`, `${e.n} of ${e.of}`, 110); });
   on('goal:done', (e) => { if (e.goal.kind !== 'officer') banner(`${goalText(e.goal)[0]} <em>達成</em>`, 'Objective complete', 140); });
   on('buff', () => banner('奪得 <em>青釭劍</em> · 攻擊力上昇', 'The Qinggang sword — attack up', 160));
+  // supplies: what he just took, over his feet (food shows the HP it gave back)
+  on('pickup', (e) => {
+    const I = ITEMS[e.kind];
+    text(toastB, I.heal ? `${I.zh} +${Math.round(e.v)}` : `${I.zh} · ${I.fx}`);
+    text(toastS, I.en); toast.dataset.k = e.kind; S.toastF = game.frame;
+  });
   on('stage:clear', () => { if (STAGE.clear) banner(`<em>${STAGE.clear[0]}</em>`, STAGE.clear[1], 200); });
   on('crowd:wave', (e) => {
     if (game.frame - S.waveF > 600) { S.waveF = game.frame; banner(`<em>${STAGE.enemy.army}</em>援兵 到着`, `${STAGE.enemy.en} reinforcements have arrived!`, 130); }
@@ -261,6 +272,16 @@ export function createHud(root, game, { camera = null } = {}) {
       const mf = f - S.musouF, me = f - S.musouEnd;
       const copyA = inMusou || me < 30 ? Math.min(clamp01((mf - 8) / 14), me >= 0 && me < 30 ? 1 - me / 30 : 1) : 0;
       set(copy, 'opacity', copyA.toFixed(2));
+
+      // buffs (虎符 / 玄甲): a chip each above the HP bar with its time draining; blinks in the last 3 s
+      for (const b of buffs) {
+        const left = h[b.k];
+        set(b.el, 'opacity', left > 0 ? (left < 180 && (f >> 3) & 1 ? '0.35' : '1') : '0');
+        if (left > 0) set(b.bar, 'transform', `scaleX(${(left / BUFF).toFixed(3)})`);
+      }
+      const tt = f - S.toastF;
+      set(toast, 'opacity', tt < 100 ? Math.min(1, tt / 5, (100 - tt) / 20).toFixed(2) : '0');
+      if (tt < 100) set(toast, 'transform', `translateY(${(-Math.min(tt, 30) * 0.06).toFixed(2)}rem)`);
 
       // goal box (under the minimap): the objective, its count (n / of) or the fill of the spot being taken; the last
       // goal stays ticked off until the next one starts; 勝利 once the battle is won

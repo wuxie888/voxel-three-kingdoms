@@ -5,11 +5,14 @@ const SKEY = 'vtk:settings', RKEY = 'vtk:records';
 const read = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } };
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } };
 
-/** dmg: × damage the hero takes · hp: × officer / boss health · gap: × the time between enemy strikes. */
+/** dmg: × damage the hero takes · hp: × officer / boss health · gap: × the time between enemy strikes · grace: × the
+ *  feint spell after a blow lands · guard: chance an officer blocks a light attack from the front · breakout: share of
+ *  his health an officer takes in one held chain before he shrugs it off and swings back with armour (by damage, so a
+ *  fast string and a heavy one are answered alike). */
 export const DIFFS = {
-  easy: { id: 'easy', zh: '易', en: 'EASY', dmg: 0.55, hp: 0.75, gap: 1.3 },
-  normal: { id: 'normal', zh: '普通', en: 'NORMAL', dmg: 1, hp: 1, gap: 1 },
-  hard: { id: 'hard', zh: '難', en: 'HARD', dmg: 1.6, hp: 1.35, gap: 0.72 },
+  easy: { id: 'easy', zh: '易', en: 'EASY', dmg: 0.55, hp: 0.75, gap: 1.3, grace: 1.6, guard: 0.3, breakout: 0.34 },
+  normal: { id: 'normal', zh: '普通', en: 'NORMAL', dmg: 1, hp: 1, gap: 1, grace: 1, guard: 0.5, breakout: 0.24 },
+  hard: { id: 'hard', zh: '難', en: 'HARD', dmg: 1.6, hp: 1.35, gap: 0.72, grace: 0.55, guard: 0.7, breakout: 0.15 },
 };
 
 /** Graphics: render scale, MSAA, depth of field, shadow map, soldiers on the field (enemies apply on the next load). */

@@ -292,6 +292,35 @@ export function createAudio(game) {
     if (e.officer || Math.random() < 0.25) play(pick(B.grunt), { gain: 0.25 * att, rate: rnd(1.05, 1.2), pan, bus: vox, send: 0.15 });
   });
 
+  // ---- guard, supplies
+  on('block', (e) => {
+    if (!ok() || !gate('block', 60)) return;
+    const { pan } = place(e.x, e.z);
+    play(pick(B.clank), { gain: 0.75, rate: rnd(1.05, 1.25), pan, send: 0.2, prio: 1 });
+  });
+  on('guard:break', (e) => {
+    if (!ok()) return;
+    const { pan } = place(e.x, e.z);
+    play(pick(B.hitHeavy), { gain: 0.9, rate: rnd(1.0, 1.1), pan, send: 0.25, prio: 1 });
+    play(pick(B.clank), { gain: 0.8, rate: rnd(0.7, 0.8), pan, send: 0.3 });
+  });
+  on('officer:break', (e) => {                // an officer roars out of the chain: a heavy clank and his shout
+    if (!ok()) return;
+    const { pan } = place(e.x, e.z);
+    play(pick(B.clank), { gain: 0.7, rate: rnd(0.6, 0.7), pan, send: 0.3, prio: 1 });
+    play(pick(B.grunt), { gain: 0.55, rate: rnd(0.72, 0.8), pan, bus: vox, send: 0.25, prio: 1 });
+  });
+  on('jar:break', (e) => {
+    if (!ok()) return;
+    const { pan, att } = place(e.x, e.z);
+    for (let j = 0; j < 3; j++) play(pick(B.crunch), { gain: 0.45 * att, rate: rnd(1.3, 1.8), pan: pan + rnd(-0.2, 0.2), delay: j * 0.02, send: 0.1 });
+  });
+  on('pickup', (e) => {
+    if (!ok()) return;
+    const buff = e.kind === 'tiger' || e.kind === 'armor';
+    play(B.ready, { gain: buff ? 0.5 : 0.32, rate: buff ? 1.0 : 1.5, send: 0.25, prio: 1 });
+  });
+
   // ---- Musou
   on('musou:ready', () => ok() && play(B.ready, { gain: 0.5, send: 0.3, prio: 1 }));
   function undip() {                           // restore the mix and the sfx / voice buses after the Musou
