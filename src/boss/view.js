@@ -3,33 +3,20 @@
 // strikes; strike effects; the boss HP bar, his entrance and defeat banners (DOM, styles inline).
 import * as THREE from 'three';
 import { on } from '../core/events.js';
-import { createRig, POSE_SIZE, HERO_SCALE, blendPose } from '../hero/rig.js';
-import { createHeroModel } from '../hero/model.js';
-import { createSecondary } from '../hero/secondary.js';
-import { sampleAnim, carryFor } from '../hero/hero.js';
-import { sampleClip } from '../hero/rig.js';
-import { makeAuthor } from '../hero/anims/author.js';
-import { finalizeMoves } from '../hero/moves.js';
+import { HERO_SCALE } from '../hero/rig.js';
+import { createPuppet } from '../hero/puppet.js';
 import { fadeOccluder } from '../camera/occlusion.js';
 
 const SCALE = HERO_SCALE * 1.2;
 
 export function createBossView(scene, game, vfx, stage) {
   const b = game.boss, fx = vfx.fx;
-  const rig = createRig();
-  scene.add(rig.root);
-  const model = createHeroModel(rig, b.def);
-  const secondary = createSecondary(scene, rig, model.material, b.def);
+  // his own model, chains and clips (built on his own move table, not the player's)
+  const puppet = createPuppet(scene, b.def, SCALE), { rig, model, show } = puppet;
   // standing between the lens and the hero he gets the crowd's see-through window (camera/occlusion.js), so the big
   // boss never hides the player
   for (const m of new Set(Object.values(model.meshes).map((x) => x.material))) fadeOccluder(m);
-  const show = (v) => { rig.root.visible = v; for (const c of secondary.chains) for (const m of c.meshes) m.visible = v; };
   show(false);
-  // his own attack clips, built on his own move table (not the player's)
-  const CARRY = carryFor(b.def), MS = b.def.moveset, BM = MS && finalizeMoves(MS.moves()), OWN = MS ? MS.clips(makeAuthor(BM, MS.entry || {}), BM) : null;
-  const pose = new Float32Array(POSE_SIZE), prev = new Float32Array(POSE_SIZE), from = new Float32Array(POSE_SIZE);
-  const pos = new THREE.Vector3();
-  let seq = null, blend = 1;
 
   // ---- telegraph decals: red discs / lanes that fill up until the strike
   const decals = [];
@@ -92,7 +79,7 @@ export function createBossView(scene, game, vfx, stage) {
   const say = (big, sub, dur = 170) => { bBig.textContent = big; bSub.textContent = sub; bannerF = game.frame; bannerDur = dur; };
   on('boss:enter', () => say(stage.bossIntro?.[0] || `${b.def.zh} 來襲`, stage.bossIntro?.[1] || `${b.def.en} APPROACHES`));
   on('boss:defeat', () => say(`${b.def.zh} 敗走`, `${b.def.en} IS DEFEATED`, 220));
-  on('scenario', () => { bannerF = -999; lag = 1; seq = null; show(false); bar.style.opacity = 0; });
+  on('scenario', () => { bannerF = -999; lag = 1; show(false); bar.style.opacity = 0; });
 
   return {
     update(dt) {
@@ -114,19 +101,11 @@ export function createBossView(scene, game, vfx, stage) {
         d.fill.scale.setScalar(d.edge.scale.x * Math.min(1, d.t * 1.05));
       }
       if (!on) return;
-      // pose: the boss's clip, cross-faded over 6 frames on every change of move
-      const a = b.anim;
-      if (OWN && OWN[a.id]) sampleClip(OWN[a.id], a.t, pose); else sampleAnim(a.id, a.t, a.id === 'run' ? 1 : 0, pose, 0, CARRY);
-      if (a.seq !== seq) { from.set(prev); blend = seq === null ? 1 : 0; seq = a.seq; }
-      if (blend < 1) { blend = Math.min(1, blend + dt * 10); blendPose(from, pose, blend * blend * (3 - 2 * blend), pose); }
-      prev.set(pose);
-      rig.root.scale.set(1, 1, 1);
-      rig.apply(pose, pos.set(b.x, b.y, b.z), b.yaw);
-      rig.root.scale.setScalar(SCALE); rig.root.updateMatrixWorld(true);
+      // pose: the boss's clip, cross-faded on every change of move
+      puppet.update(dt, b.anim, b.x, b.y, b.z, b.yaw);
       if (b.st === 'dead') { rig.root.rotation.x = -Math.min(1.45, b.stT / 30); rig.root.updateMatrixWorld(true); }
       const f = b.flash > 0 ? b.flash / 6 : 0;
       model.material.emissive.setRGB(0.9 * f, 0.15 * f, 0.08 * f);
-      secondary.update(dt);
     },
   };
 }

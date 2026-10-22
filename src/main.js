@@ -25,6 +25,9 @@ import { createBossView } from './boss/view.js';
 import { createAudio } from './audio/audio.js';
 import { createPickups } from './ui/pickups.js';
 import { on } from './core/events.js';
+import { createCampaign } from './stages/campaign.js';
+import { createProps } from './stages/props.js';
+import { DIFFS, settings, saveSettings, bestOf, keepBest, rankOf } from './core/settings.js';
 
 const params = new URLSearchParams(location.search);
 const ENEMIES = Math.max(0, Math.min(2000, params.get('enemies') ? Number(params.get('enemies')) | 0 : 300));
@@ -37,7 +40,7 @@ const scene = new THREE.Scene();
 const world = createWorld(scene);
 
 // ---- sim
-const game = { frame: 0, hitstop: 0, freeze: 0 };
+const game = { frame: 0, hitstop: 0, freeze: 0, diff: DIFFS[settings.diff] };
 game.cam = createCamSim();
 game.hero = createHero(game);
 game.crowd = createCrowd(game, ENEMIES);
@@ -46,6 +49,7 @@ game.musou = createMusou(game);
 // stage boss (虎牢關): Lü Bu — or Guan Yu when the player is Lü Bu
 const bossCfg = STAGE.boss && (STAGE.boss.id === HERO.id ? STAGE.boss.alt : STAGE.boss);
 game.boss = bossCfg ? createBoss(game, HEROES.find((h) => h.id === bossCfg.id)) : null;
+game.campaign = createCampaign(game);   // the battle's goals (STAGE.script): officers, spots to take, the boss → 勝利
 const input = createInput();
 const pickups = createPickups(game, scene);   // meat buns: heal on pickup (ui/pickups.js)
 if (params.has('debug') || params.has('rec')) Object.assign(window, { game, scene });   // debug: inspect sim state from the console
@@ -59,6 +63,7 @@ const sigFx = createSignatureFx(scene, game, vfx, camRig.camera);   // per-hero 
 const chargeFx = HERO.anim === 'fan' ? null : createChargeFx(scene, game, camRig.camera, heroView);   // charge-hold glow at the blade
 const bossView = game.boss ? createBossView(scene, game, vfx, { bossIntro: bossCfg.intro }) : null;
 const musouView = createMusouView(scene, game, camRig.camera);   // musou part: grade, dragon, cut-in (render-only)
+const props = createProps(scene, game, vfx, camRig.camera);                      // goal beacons, the bundle by the well, fire ships, the ally
 // hud part: camera passed so officer name/HP tags can be projected over their heads (read-only)
 const hud = createHud(document.getElementById('hud'), game, { camera: camRig.camera });
 createAudio(game);
@@ -85,6 +90,7 @@ function step() {
   game.crowd.step();
   pickups.step();
   if (game.boss) game.boss.step();
+  game.campaign.step();
   game.musou.step();
   game.frame++;
   vfx.afterStep();
@@ -101,6 +107,7 @@ function render() {
   pickups.update();
   if (chargeFx) chargeFx.update(dt);
   if (bossView) bossView.update(dt);
+  props.update(dt);
   camRig.update(dt);
   world.update(dt, camRig.focus);
   musouView.update(dt);
@@ -109,26 +116,39 @@ function render() {
   hud.update();
 }
 
-// ---- result card: 戰死 when the hero falls (restart / back to hero select), 勝利 when the stage boss is defeated
+// ---- result card: 戰死 when the hero falls (restart / back to hero select), 勝利 when the battle's last goal falls
+// (stages/campaign.js), with the rank against the stage's par and the best result kept per battle × hero
+const clock = (sec) => { const s = Math.round(sec); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const result = (() => {
   const el = document.createElement('div');
   el.id = 'result'; el.hidden = true;
-  el.innerHTML = '<div class="big"></div><div class="en"></div><div class="stats"></div><div class="btns"><button data-a="retry">再戰<small>RETRY · Enter</small></button><button data-a="menu">選將<small>HEROES · Esc</small></button><button data-a="go">繼續<small>CONTINUE</small></button></div>';
+  el.innerHTML = '<div class="head"><div class="big"></div><div class="rank"><b></b><small>評價 RANK</small></div></div><div class="en"></div><div class="stats"></div><div class="best"></div><div class="btns"><button data-a="retry">再戰<small>RETRY · Enter</small></button><button data-a="menu">選將<small>HEROES · Esc</small></button><button data-a="go">繼續<small>CONTINUE</small></button></div>';
   document.body.appendChild(el);
-  const [big, en, stats] = el.children, cont = el.querySelector('[data-a="go"]');
+  const big = el.querySelector('.big'), rankEl = el.querySelector('.rank'), rankB = el.querySelector('.rank b');
+  const en = el.querySelector('.en'), stats = el.querySelector('.stats'), best = el.querySelector('.best'), cont = el.querySelector('[data-a="go"]');
   let maxCombo = 0, open = false, t0 = 0;
   on('hit', () => { maxCombo = Math.max(maxCombo, game.hero.combo); });
   on('scenario', () => { maxCombo = 0; });
-  const show = (win, delay) => setTimeout(() => {
+  const show = (win, delay, clear = null) => setTimeout(() => {
     if (open || (!win && game.hero.state !== 'dead')) return;
-    big.textContent = win ? '勝利' : '戰死'; en.textContent = win ? 'VICTORY' : 'FALLEN IN BATTLE';
+    big.textContent = win ? '勝利' : '戰死'; en.textContent = win ? `VICTORY · ${STAGE.en}` : 'FALLEN IN BATTLE';
     el.classList.toggle('win', win); cont.hidden = !win;
-    const s = Math.round((game.frame - t0) / 60);
-    stats.innerHTML = `<span>擊破 <b>${game.hero.kos}</b></span><span>最大連擊 <b>${maxCombo}</b></span><span>時間 <b>${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</b></span>`;
+    const time = clear ? clear.time : (game.frame - t0) / 60;
+    stats.innerHTML = `<span>擊破 <b>${game.hero.kos}</b></span><span>最大連擊 <b>${maxCombo}</b></span><span>時間 <b>${clock(time)}</b></span><span>難度 <b>${game.diff.zh}</b></span>`;
+    rankEl.hidden = !clear; best.textContent = '';
+    if (clear && STAGE.par) {
+      const rank = rankOf({ ...clear, hpMax: game.hero.hpMax }, STAGE.par);
+      rankB.textContent = rank; rankEl.dataset.r = rank;
+      const isNew = keepBest(STAGE.id, HERO.id, { rank, time: Math.round(time), kos: clear.kos, combo: maxCombo, diff: game.diff.id });
+      const b = bestOf(STAGE.id, HERO.id);
+      best.innerHTML = isNew ? '<em>新紀錄</em> NEW RECORD' : `最佳紀錄 BEST · <b>${b.rank}</b> · ${clock(b.time)} · ${DIFFS[b.diff]?.zh || ''}`;
+      paintBest();
+    }
     el.hidden = false; open = true; hudEl.hidden = true;
   }, delay);
   on('hero:death', () => show(false, 1800));
-  on('boss:defeat', () => show(true, 3200));
+  on('boss:defeat', () => { if (!STAGE.script) show(true, 3200); });
+  on('stage:clear', (e) => show(true, 1600, e));
   const act = (a) => {
     if (!open) return;
     if (a === 'retry') start();
@@ -149,6 +169,7 @@ function start() {
   game.hero.reset();
   game.crowd.reset(); game.combat.reset(); game.musou.reset(); game.cam.reset(0);
   if (game.boss) game.boss.reset(), game.boss.st = 'off';
+  game.campaign.reset();                         // before the army: with a script, the named officers wait for their goal
   heroView.reset();
   game.crowd.spawnArmy(Math.min(ENEMIES, game.crowd.grunts));
   if (params.has('musou')) game.hero.musou = game.hero.musouMax;   // debug: start with a full gauge
@@ -178,7 +199,29 @@ const card = (row, on, html, fn) => {
   return b;
 };
 for (const h of HEROES) paintPortrait(card('heroes', h === HERO, `<canvas width="20" height="20"></canvas><span><b>${h.zh}</b><small>${h.weapon}</small><small>${h.role}</small></span>`, () => pickHero(h.id)).firstChild, h);
-for (const s of STAGES) card('stages', s === STAGE, `<span><b>${s.zh}</b><small>${s.time} · ${s.enemy.army}</small></span>`, () => pickStage(s.id));
+const stageCards = STAGES.map((s) => card('stages', s === STAGE, `<span><b>${s.zh}</b><small>${s.time} · ${s.enemy.army}</small></span><i class="rk"></i>`, () => pickStage(s.id)));
+/** Best rank of the chosen hero on each battle card. */
+function paintBest() {
+  STAGES.forEach((s, k) => {
+    const b = bestOf(s.id, HERO.id), rk = stageCards[k].querySelector('.rk');
+    rk.textContent = b ? b.rank : ''; rk.dataset.r = b ? b.rank : ''; rk.title = b ? `最佳 ${b.rank} · ${clock(b.time)}` : '';
+  });
+}
+paintBest();
+// difficulty: applies at once (the battle restarts)
+const diffRow = document.getElementById('diff');
+for (const d of Object.values(DIFFS)) {
+  const b = document.createElement('button');
+  b.innerHTML = `${d.zh}<small>${d.en}</small>`; b.className = d.id === settings.diff ? 'on' : '';
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (d.id === game.diff.id) return;
+    saveSettings({ diff: d.id }); game.diff = d;
+    for (const x of diffRow.children) x.classList.toggle('on', x === b);
+    start();
+  });
+  diffRow.appendChild(b);
+}
 let paused;
 const setPaused = (v) => { paused = v; menu.hidden = !v; hudEl.hidden = v; input.sample(); };   // sample(): drop keys pressed on the menu
 go.addEventListener('click', () => setPaused(false));
@@ -214,4 +257,5 @@ start();
 setPaused(!PREVIEW);
 if (PREVIEW) document.getElementById('hud').hidden = true;
 render();
+post.warm(scene, camRig.camera);
 requestAnimationFrame(frame);

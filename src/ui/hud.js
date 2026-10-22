@@ -7,8 +7,9 @@
 // Styles live in index.html (#hud ...). Sizes are rem, and 1rem = 1/72 of the viewport height (10 px at 720p).
 import { Vector3 } from 'three';
 import { on } from '../core/events.js';
-import { HERO } from '../heroes/index.js';
+import { HERO, HEROES } from '../heroes/index.js';
 import { STAGE } from '../stages/index.js';
+import { forHero } from '../stages/campaign.js';
 import { ST } from '../crowd/crowd.js';
 import { ARENA_RADIUS, WALL_Z, GATE_X } from '../world/world.js';
 
@@ -33,7 +34,9 @@ export function createHud(root, game, { camera = null } = {}) {
     <div class="h-chain"><div class="num"><b class="dig" data-t="0"><span>0</span></b><u></u><u></u><u></u></div><small><em>連擊</em>CHAIN</small></div>
     <div class="h-mile"><b class="dig" data-t="50"><span>50</span></b><i class="seal">擊破</i></div>
     <div class="h-band"><p></p><small></small></div>
-    <div class="h-dlg"><canvas width="20" height="20"></canvas><div><b>${HERO.zh} <span>${HERO.en}</span></b><p></p><small></small></div></div>
+    <div class="h-dlg"><canvas width="20" height="20"></canvas><i class="seal"></i><div><b><em>${HERO.zh}</em> <span>${HERO.en}</span></b><p></p><small></small></div></div>
+    <div class="h-goal"><i class="seal">目標</i><div><b></b><small></small><div class="cap"><i></i></div></div><span class="pg"></span></div>
+    <div class="h-ways">${[0, 1, 2].map(() => '<div class="way"><i></i><b></b><span></span></div>').join('')}</div>
     <div class="h-copy">${HERO.copy}</div>
     <div class="h-player"><div class="badge"><canvas width="20" height="20"></canvas></div><div class="name">${HERO.zh}</div>
       <div class="bar hp"><em></em><i></i></div>
@@ -46,19 +49,43 @@ export function createHud(root, game, { camera = null } = {}) {
   const mile = $('.h-mile'), mileB = $('.h-mile b'), mileS = $('.h-mile .seal');
   const band = $('.h-band'), bandP = $('.h-band p'), bandS = $('.h-band small');
   const dlg = $('.h-dlg'), dlgP = $('.h-dlg p'), dlgS = $('.h-dlg small'), copy = $('.h-copy');
+  const dlgCv = $('.h-dlg canvas'), dlgSeal = $('.h-dlg .seal'), dlgName = $('.h-dlg b em'), dlgEn = $('.h-dlg b span');
+  const goalEl = $('.h-goal'), goalB = $('.h-goal b'), goalS = $('.h-goal small'), goalPg = $('.h-goal .pg'), goalCap = $('.h-goal .cap'), goalCapI = $('.h-goal .cap i');
+  const ways = $$('.h-ways .way').map((el) => ({ el, i: el.querySelector('i'), b: el.querySelector('b'), sp: el.querySelector('span') }));
   const target = $('.h-target'), targetB = $('.h-target b'), targetS = $('.h-target span'), targetI = $('.h-target .bar i'), targetE = $('.h-target .bar em');
   const offs = $$('.off').map((el) => ({ el, bd: el.querySelector('.bd'), mk: el.querySelector('.mk'), ld: el.querySelector('.ld'),
     bar: el.querySelector('.bar i'), lagEl: el.querySelector('.bar em'), lag: 1 }));
   const moraleI = $('.morale i'), mapEl = $('.h-map');
   const mapCv = $('.h-map canvas'), map = mapCv.getContext('2d');
   $$('canvas[width="20"]').forEach((cv) => paintPortrait(cv));
+  // dialogue speakers: the hero, an ally officer, the boss (pixel portraits) or a named enemy officer (red seal)
+  const cp = game.campaign;
+  const speaker = (who) => {
+    if (who === 'ally' && cp?.ally) who = cp.ally.id;
+    if (who === 'boss' && game.boss) return { def: game.boss.def, side: 'foe' };
+    if (who.startsWith('off:')) { const [zh, en] = OFFICERS[+who.slice(4)]; return { zh, en, side: 'foe' }; }
+    const def = who === 'hero' ? HERO : HEROES.find((x) => x.id === who) || HERO;
+    return { def, side: def === HERO ? 'hero' : 'ally' };
+  };
+  let dlgWho = 'hero';
+  const showSpeaker = (who) => {
+    if (who === dlgWho) return;
+    dlgWho = who;
+    const sp = speaker(who);
+    dlg.dataset.side = sp.side;
+    if (sp.def) {
+      const g = dlgCv.getContext('2d'); g.clearRect(0, 0, 20, 20); paintPortrait(dlgCv, sp.def);
+      text(dlgName, sp.def.zh); text(dlgEn, sp.def.en);
+    } else { text(dlgName, sp.zh); text(dlgEn, sp.en); text(dlgSeal, sp.zh[0]); }
+    dlg.classList.toggle('foe-seal', !sp.def);
+  };
 
   // ---- event-driven state (frames are sim frames)
   const S = {};
   const reset = () => Object.assign(S, {
     lastCombo: 0, shownChain: 0, chainF: -99, chainQ: [], ghostN: 0, shownKo: 0, koF: -99, mile: 0, mileF: -99, mileTop: 33, mileDim: 1,
     lagHp: 1, lastF: 0, hurtF: -99, actF: 0, band: null, bandQ: [], dlg: null, waveF: -999, tgt: -1, tgtF: -999, tgtKoF: -999,
-    musouF: -999, musouEnd: -999, waves: [], introCut: 0,
+    musouF: -999, musouEnd: -999, waves: [], introCut: 0, dlgQ: [], goalI: -2, goalF: -999,
   });
   reset();
   // heavy numerals: the rim layer (::before) reads data-t, the gradient face is the inner span
@@ -68,8 +95,16 @@ export function createHud(root, game, { camera = null } = {}) {
   // system banners queue (one at a time, held back while the Musou plays); dialogue (top left) and the banner band
   // (y 64-70 %) sit apart, so neither cancels the other. Dialogue holds 5 s like DW8.
   const banner = (html, en, dur = 150) => { if (S.bandQ.length < 3) S.bandQ.push({ html, en, dur }); };
-  const say = (zh, en, dur = 300) => { S.dlg = { zh, en, f: game.frame, dur }; };
-  on('scenario', (e) => { reset(); resetText(); if (e.name === 'crowd' || e.name === 'arena') { S.dlg = { zh: OPEN[0], en: OPEN[1], f: 185, dur: 300 }; banner(STAGE.intro[0], STAGE.intro[1], 170); } });
+  const say = (zh, en, dur = 300, who = 'hero') => { S.dlg = { zh, en, f: game.frame, dur, who }; };
+  on('scenario', (e) => { reset(); resetText(); if (e.name === 'crowd' || e.name === 'arena') { S.dlg = { zh: OPEN[0], en: OPEN[1], f: 185, dur: 300, who: 'hero' }; banner(STAGE.intro[0], STAGE.intro[1], 170); } });
+  // stage script (stages/campaign.js): goal banners, the speakers' lines (queued, 4 s each), the clear banner
+  const goalText = (g) => forHero(g.goal) || ['', ''];
+  on('say', (e) => { if (S.dlgQ.length < 4) S.dlgQ.push({ zh: e.zh, en: e.en, dur: 250, who: e.who }); });
+  on('goal:start', (e) => { const [zh, en] = goalText(e.goal); banner(`<b class="gl">目標</b>${zh}`, `Objective — ${en}`, 170); S.goalF = game.frame; });
+  on('goal:progress', (e) => { if (e.goal === undefined && cp?.goal?.kind === 'reach' && cp.of > 1) banner(`${cp.goal.label} <em>${e.n} / ${e.of}</em>`, `${e.n} of ${e.of}`, 110); });
+  on('goal:done', (e) => { if (e.goal.kind !== 'officer') banner(`${goalText(e.goal)[0]} <em>達成</em>`, 'Objective complete', 140); });
+  on('buff', () => banner('奪得 <em>青釭劍</em> · 攻擊力上昇', 'The Qinggang sword — attack up', 160));
+  on('stage:clear', () => { if (STAGE.clear) banner(`<em>${STAGE.clear[0]}</em>`, STAGE.clear[1], 200); });
   on('crowd:wave', (e) => {
     if (game.frame - S.waveF > 600) { S.waveF = game.frame; banner(`<em>${STAGE.enemy.army}</em>援兵 到着`, `${STAGE.enemy.en} reinforcements have arrived!`, 130); }
     S.waves.push({ x: e.x, z: e.z, f: game.frame });
@@ -213,8 +248,10 @@ export function createHud(root, game, { camera = null } = {}) {
         set(band, 'opacity', Math.min(1, bt / 6, (b.dur - bt) / 18).toFixed(2));
         set(band, 'transform', `scaleY(${Math.min(1, 0.3 + bt / 6).toFixed(3)})`);
       } else set(band, 'opacity', '0');
+      if (S.dlgQ.length && !inMusou && (!S.dlg || f - S.dlg.f >= S.dlg.dur || f < S.dlg.f)) S.dlg = { ...S.dlgQ.shift(), f };
       const d = S.dlg, dt = d ? f - d.f : -1, dlgA = d && dt >= 0 && dt < d.dur ? Math.min(1, dt / 8, (d.dur - dt) / 16) : 0;
       if (dlgA > 0) {
+        showSpeaker(d.who || 'hero');
         text(dlgP, d.zh); text(dlgS, d.en);
         set(dlg, 'opacity', dlgA.toFixed(2));
         set(dlg, 'transform', `translateX(${(-Math.max(0, 1 - dt / 8) * 2).toFixed(2)}rem)`);
@@ -224,6 +261,59 @@ export function createHud(root, game, { camera = null } = {}) {
       const mf = f - S.musouF, me = f - S.musouEnd;
       const copyA = inMusou || me < 30 ? Math.min(clamp01((mf - 8) / 14), me >= 0 && me < 30 ? 1 - me / 30 : 1) : 0;
       set(copy, 'opacity', copyA.toFixed(2));
+
+      // goal box (under the minimap): the objective, its count (n / of) or the fill of the spot being taken; the last
+      // goal stays ticked off until the next one starts; 勝利 once the battle is won
+      if (cp && (cp.active || cp.cleared)) {
+        const g = cp.goal || (cp.i >= 0 ? STAGE.script[cp.i] : null), done = !cp.goal;
+        const key = cp.cleared ? 'clear' : `${cp.i}:${done}`;
+        if (S.goalI !== key) {
+          S.goalI = key;
+          const [zh, en] = cp.cleared ? ['勝利', 'VICTORY'] : g ? goalText(g) : ['', ''];
+          text(goalB, zh); text(goalS, en);
+          goalEl.classList.toggle('done', done || cp.cleared);
+          goalEl.classList.remove('pop'); void goalEl.offsetWidth; goalEl.classList.add('pop');   // restart the pop-in
+        }
+        const multi = g && !done && cp.of > 1;
+        text(goalPg, multi ? `${cp.n}/${cp.of}` : '');
+        const cap = g && !done && g.kind === 'reach' && g.hold ? Math.max(0, ...cp.caps.filter((v) => v < 1)) : 0;
+        set(goalCap, 'opacity', cap > 0 ? '1' : '0');
+        set(goalCapI, 'transform', `scaleX(${cap.toFixed(3)})`);
+        set(goalEl, 'opacity', (g || cp.cleared ? Math.min(1, calm + 0.35) : 0).toFixed(2));
+      } else set(goalEl, 'opacity', '0');
+
+      // waypoints: each spot to take / goal officer / the boss gets a marker over it on screen (spots only: officers
+      // have their tags) or an arrow at the screen edge pointing to it, with its name and distance
+      const wt = [];
+      if (cp?.goal && camera && !inMusou) {
+        const g = cp.goal;
+        if (g.kind === 'reach') g.points.forEach(([x, z], j) => { if (cp.caps[j] < 1) wt.push({ x, y: 3.4, z, label: g.label, spot: true }); });
+        else if (g.kind === 'officer') cp.ofs.forEach((i) => { if (!c.kod[i] && c.st[i] !== ST.OFF) wt.push({ x: c.x[i], y: 2.6, z: c.z[i], label: OFFICERS[i - c.grunts][0] }); });
+        else if (g.kind === 'boss' && game.boss?.alive()) wt.push({ x: game.boss.x, y: 3.2, z: game.boss.z, label: game.boss.def.zh });
+      }
+      ways.forEach((w, k) => {
+        const t = wt[k];
+        if (!t) { set(w.el, 'opacity', '0'); return; }
+        v3.set(t.x, t.y, t.z).applyMatrix4(camera.matrixWorldInverse);
+        const behind = v3.z > -0.5;
+        v3.applyMatrix4(camera.projectionMatrix);
+        const nx = behind ? -v3.x : v3.x;
+        let ny = behind ? -v3.y : v3.y;
+        const on = !behind && Math.abs(nx) < 0.9 && Math.abs(ny) < 0.82;
+        const dist = Math.hypot(t.x - h.x, t.z - h.z);
+        if (on && !t.spot && dist < game.hudTagR) { set(w.el, 'opacity', '0'); return; }   // the officer's own tag shows him
+        let px2 = (nx + 1) / 2 * W, py2 = (1 - ny) / 2 * H, rot = 0;
+        if (!on) {                                           // off screen: on an ellipse round the hero, pointing the way
+          if (behind && Math.abs(ny) < 0.25) ny = -0.6;         // straight behind: below him, not along the horizon
+          rot = Math.atan2(nx * W, ny * H);
+          px2 = W * (0.5 + 0.38 * Math.sin(rot)); py2 = H * (0.5 - 0.27 * Math.cos(rot));   // clear of the corners, goal box and HP band
+        }
+        w.el.classList.toggle('edge', !on);
+        set(w.el, 'transform', `translate(${px2.toFixed(1)}px, ${py2.toFixed(1)}px)`);
+        set(w.i, 'transform', on ? 'none' : `rotate(${rot.toFixed(3)}rad)`);
+        text(w.b, t.label); text(w.sp, `${Math.round(dist)}m`);
+        set(w.el, 'opacity', (0.55 + 0.45 * (0.5 + 0.5 * Math.sin(f * 0.1))).toFixed(2));
+      });
 
       // officer target bar (top left): last officer hit (10 s) or the nearest officer within 9 m
       let tg = S.tgt >= 0 && c.st[S.tgt] !== ST.OFF && (f - S.tgtF < 600 || f - S.tgtKoF < 70) ? S.tgt : -1;
@@ -373,6 +463,26 @@ export function createHud(root, game, { camera = null } = {}) {
         const x = Math.max(5, Math.min(195, X(c.x[i]))), y = Math.max(5, Math.min(195, Y(c.z[i])));
         map.fillStyle = '#1a0d08'; map.fillRect(x - 5, y - 5, 10, 10);
         map.fillStyle = i === tg ? '#ffe08a' : '#ff5a3a'; map.fillRect(x - 3.5, y - 3.5, 7, 7);
+      }
+      if (cp?.goal) {
+        const pulse = 0.5 + 0.5 * Math.sin(f * 0.12), pin = (v) => Math.max(7, Math.min(193, v));
+        if (cp.goal.kind === 'reach') cp.goal.points.forEach(([x, z], j) => {
+          if (cp.caps[j] >= 1) return;
+          const px2 = pin(X(x)), py2 = pin(Y(z));
+          map.strokeStyle = `rgba(255,214,90,${(0.3 + 0.5 * pulse).toFixed(2)})`; map.lineWidth = 2;
+          map.beginPath(); map.arc(px2, py2, 8 + pulse * 6, 0, 7); map.stroke();
+          map.fillStyle = '#1a0d08'; map.beginPath(); map.moveTo(px2, py2 - 8); map.lineTo(px2 + 7, py2); map.lineTo(px2, py2 + 8); map.lineTo(px2 - 7, py2); map.fill();
+          map.fillStyle = '#ffd65a'; map.beginPath(); map.moveTo(px2, py2 - 5.5); map.lineTo(px2 + 4.5, py2); map.lineTo(px2, py2 + 5.5); map.lineTo(px2 - 4.5, py2); map.fill();
+        });
+        else if (cp.goal.kind === 'officer') for (const i of cp.ofs) {
+          if (c.kod[i] || c.st[i] === ST.OFF) continue;
+          map.strokeStyle = `rgba(255,214,90,${(0.4 + 0.5 * pulse).toFixed(2)})`; map.lineWidth = 2;
+          map.beginPath(); map.arc(pin(X(c.x[i])), pin(Y(c.z[i])), 9 + pulse * 4, 0, 7); map.stroke();
+        }
+      }
+      if (cp?.ally) {
+        const ax = Math.max(5, Math.min(195, X(cp.ally.x))), ay2 = Math.max(5, Math.min(195, Y(cp.ally.z)));
+        map.fillStyle = '#081a2e'; map.fillRect(ax - 5, ay2 - 5, 10, 10); map.fillStyle = '#7ab8ff'; map.fillRect(ax - 3.5, ay2 - 3.5, 7, 7);
       }
       const ay = h.yaw;                                              // hero arrow
       const px = (a, r) => 100 - Math.sin(a) * r, py = (a, r) => 100 - Math.cos(a) * r;

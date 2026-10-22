@@ -1,7 +1,10 @@
 // Stage set pieces (render-only), chosen by STAGE.set:
-//   'river' 赤壁 — a broad river between the arena and the far bank's fortress: rippling dark water with firelight
-//                  glinting on it, a muddy bank, and a line of chained warships (連環船), several ablaze.
-//   'pass'  虎牢關 — towering rock walls on both flanks that close in on the gate: a pass funnelling to Hulao.
+//   'river'  赤壁 — a broad river between the arena and the far bank's fortress: rippling dark water with firelight
+//                   glinting on it, a muddy bank, a line of chained warships (連環船), several ablaze, and the jetties
+//                   where the fire ships wait (STAGE.props fireboats).
+//   'pass'   虎牢關 — towering rock walls on both flanks that close in on the gate: a pass funnelling to Hulao.
+//   'stream' 長坂坡 — a shallow stream behind the field with 長坂橋 across it (where the stage script's ally waits), and
+//                   the dry well where Liu Shan hides (STAGE.props well).
 // blocked(x, z) tells the dressing where not to stand troops and banners.
 import * as THREE from 'three';
 import { makeRng } from '../core/rng.js';
@@ -11,6 +14,8 @@ import { STAGE } from '../stages/index.js';
 
 export const SET = STAGE.set || null;
 export const RIVER = { z0: 49, z1: 95 };   // the near bank just past the arena rim (46 m), in the default view
+export const STREAM = { z0: -54, z1: -48, x: 0, deckY: 0.42 };   // 長坂坡: behind the start, past the rim; bridge at x
+const WELL = STAGE.props?.find((p) => p.kind === 'well')?.at;
 const lit = () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, flatShading: true });
 
 /** Rock wall edge |x| on side s (+1 / −1) at depth z: wide open over the arena, closing on the gate past z 40. */
@@ -21,14 +26,18 @@ function edge(s, z) {
 export function blocked(x, z) {
   if (SET === 'river') return z > RIVER.z0 - 3 && z < RIVER.z1 + 1;
   if (SET === 'pass') return Math.abs(x) > edge(Math.sign(x) || 1, z) - 3;
+  if (SET === 'stream') {
+    if (WELL && Math.hypot(x - WELL[0], z - WELL[1]) < 5) return true;
+    return (z > STREAM.z0 - 3 && z < STREAM.z1 + 3) || (Math.abs(x - STREAM.x) < 10 && z < -42);   // the stream, the road over the bridge
+  }
   return false;
 }
 
 // ---------------------------------------------------------------- 赤壁: river and fleet
-function waterMesh() {
-  const W = 700, D = RIVER.z1 - RIVER.z0;
+function waterMesh(z0 = RIVER.z0, z1 = RIVER.z1, color = 0x14243a) {
+  const W = 700, D = z1 - z0;
   const geo = new THREE.PlaneGeometry(W, D, 280, 32).rotateX(-Math.PI / 2);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x14243a, roughness: 0.2, metalness: 0.3 });
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.2, metalness: 0.3 });
   const uTime = { value: 0 };
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = uTime;
@@ -46,7 +55,7 @@ function waterMesh() {
       totalEmissiveRadiance += vec3(1.0, 0.42, 0.12) * gl * 0.9 + vec3(0.03, 0.07, 0.13);`);
   };
   const m = new THREE.Mesh(geo, mat);
-  m.position.set(0, 0.16, (RIVER.z0 + RIVER.z1) / 2);
+  m.position.set(0, 0.16, (z0 + z1) / 2);
   m.receiveShadow = true;
   return { mesh: m, uTime };
 }
@@ -99,6 +108,11 @@ function buildRiver(scene) {
       b.push({ s: [0.5, 0.25, 0.25], p: [x0 + (x1 - x0) * u, 2.2 - sag, z0 + (z1 - z0) * u], r: [0, Math.atan2(z1 - z0, x1 - x0) + (k & 1) * 1.57, 0], c: 0x2a2a2e });
     }
   }
+  // jetties for the fire ships (STAGE.props fireboats): planks from the bank out to where each boat is moored
+  for (const [x] of STAGE.props?.find((p) => p.kind === 'fireboats')?.at || []) {
+    for (let z = RIVER.z0 - 4; z < RIVER.z0 + 3.5; z += 0.55) b.push({ s: [2.4, 0.14, 0.48], p: [x, 0.36, z], r: [0, r.range(-0.03, 0.03), 0], c: shade(0x6a4a30, r.range(0.75, 1.05)) });
+    for (const sx of [-1.1, 1.1]) for (let z = RIVER.z0 - 3; z < RIVER.z0 + 4; z += 2.2) b.push({ s: [0.24, 1.4, 0.24], p: [x + sx, 0.4, z], c: 0x3e2a1c });
+  }
   const m = new THREE.Mesh(boxesGeometry(b), lit());
   m.castShadow = true; m.receiveShadow = true;
   const water = waterMesh();
@@ -138,8 +152,55 @@ function buildPass(scene) {
   return { fires: [], update() {} };
 }
 
+// ---------------------------------------------------------------- 長坂坡: the stream, 長坂橋 and the dry well
+function buildStream(scene) {
+  const r = makeRng(404), b = [], X = STREAM.x, Y = STREAM.deckY;
+  // banks: mud, stones and reeds along both sides
+  for (const [zb, dir] of [[STREAM.z1, 1], [STREAM.z0, -1]]) for (let x = -170; x < 170; x += 1.4) {
+    if (Math.abs(x - X) < 2.9) continue;
+    b.push({ s: [r.range(1, 2.2), r.range(0.2, 0.45), r.range(0.8, 1.7)], p: [x, 0.1, zb + dir * r.range(-0.2, 0.5)], r: [0, r.range(-0.3, 0.3), 0], c: shade(0x4a3a2c, r.range(0.7, 1.05)) });
+    if (r.chance(0.5)) b.push({ s: [0.08, r.range(0.7, 1.5), 0.08], p: [x + r.range(-0.5, 0.5), 0.55, zb - dir * r.range(0.1, 1.3)], r: [r.range(-0.2, 0.2), 0, r.range(-0.2, 0.2)], c: shade(0x6a6a34, r.range(0.8, 1.1)) });
+  }
+  // the bridge: plank deck on log trestles, stepped ramps down to both banks, posts and a double rail
+  const W = 4.4, zN = STREAM.z1 + 1.2, zS = STREAM.z0 - 1.2;
+  for (let z = zS; z < zN; z += 0.5) b.push({ s: [W, 0.14, 0.47], p: [X, Y, z + 0.25], r: [0, r.range(-0.02, 0.02), 0], c: shade(0x7a5434, r.range(0.75, 1.1)) });
+  for (const [z0, d] of [[zN, 1], [zS, -1]]) for (let k = 0; k < 3; k++) {
+    b.push({ s: [W, 0.14, 0.75], p: [X, Y * (2 - k) / 3, z0 + d * (0.4 + k * 0.75)], c: shade(0x6e4a2e, r.range(0.75, 1.05)) });
+  }
+  for (let z = zS + 0.6; z < zN; z += 2.1) {
+    for (const sx of [-1, 1]) {
+      b.push({ s: [0.34, Y + 0.9, 0.34], p: [X + sx * 1.6, (Y - 0.9) / 2, z], c: 0x3e2a1c });                 // trestle legs in the water
+      b.push({ s: [0.26, 1.1, 0.26], p: [X + sx * (W / 2 - 0.12), Y + 0.55, z], c: 0x4a3220 });            // rail posts
+    }
+    b.push({ s: [3.6, 0.2, 0.2], p: [X, -0.1, z], r: [0, 0, 0.35], c: 0x3a2618 });                         // cross brace
+  }
+  for (const sx of [-1, 1]) for (const y of [Y + 0.55, Y + 1.0]) b.push({ s: [0.14, 0.14, zN - zS + 1.6], p: [X + sx * (W / 2 - 0.12), y, (zN + zS) / 2], c: shade(0x5a3d26, y > 1 ? 1 : 0.85) });
+  // the dry well in the burnt-out village: stone ring, windlass frame, a fallen bucket, broken cart and planks
+  if (WELL) {
+    const [wx, wz] = WELL;
+    for (let k = 0; k < 14; k++) {
+      const a = k / 14 * Math.PI * 2;
+      b.push({ s: [0.48, 0.82, 0.34], p: [wx + Math.sin(a) * 0.95, 0.41, wz + Math.cos(a) * 0.95], r: [0, a, 0], c: shade(0x8a8078, r.range(0.75, 1.05)) });
+    }
+    b.push({ s: [1.5, 0.05, 1.5], p: [wx, 0.62, wz], c: 0x120c0a });                                      // dark shaft
+    for (const sx of [-1, 1]) b.push({ s: [0.18, 2.1, 0.18], p: [wx + sx * 1.15, 1.05, wz], c: 0x4a3220 });
+    b.push({ s: [2.6, 0.16, 0.16], p: [wx, 2.05, wz], c: 0x3e2a1c }, { s: [1.2, 0.26, 0.26], p: [wx, 1.75, wz], c: 0x5a4030 });
+    b.push({ s: [0.04, 0.9, 0.04], p: [wx + 0.1, 1.25, wz], c: 0x8a7a5a }, { s: [0.34, 0.3, 0.34], p: [wx + 1.6, 0.15, wz + 0.8], r: [1.2, 0.4, 0], c: 0x5a4030 });
+    for (let k = 0; k < 5; k++) b.push({ s: [r.range(1.2, 2.4), 0.12, 0.3], p: [wx - 2 + r.range(-1.5, 1.5), 0.08, wz + 2 + r.range(-1, 1)], r: [0, r.range(0, 3), 0], c: shade(0x3a2618, r.range(0.6, 1)) });
+    for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; b.push({ s: [0.12, 0.12, 0.6], p: [wx + 3 + Math.cos(a) * 0.35, 0.7 + Math.sin(a) * 0.35, wz - 2.2], r: [0, 0, a], c: 0x4a3220 }); }   // cart wheel
+    b.push({ s: [1.8, 0.5, 1.1], p: [wx + 3.8, 0.35, wz - 2.6], r: [0, 0.4, 0.25], c: 0x4e3826 });
+  }
+  const m = new THREE.Mesh(boxesGeometry(b), lit());
+  m.castShadow = true; m.receiveShadow = true;
+  const water = waterMesh(STREAM.z0, STREAM.z1, 0x2a3c4a);
+  water.mesh.position.y = 0.08;
+  scene.add(m, water.mesh);
+  return { fires: [], update(t) { water.uTime.value = t; } };
+}
+
 export function buildSetpiece(scene) {
   if (SET === 'river') return buildRiver(scene);
   if (SET === 'pass') return buildPass(scene);
+  if (SET === 'stream') return buildStream(scene);
   return { fires: [], update() {} };
 }

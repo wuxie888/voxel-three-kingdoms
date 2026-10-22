@@ -36,7 +36,7 @@ export function createHero(game) {
     hp: 400, hpMax: 400, musou: 0, musouMax: 100,
     state: 'idle', stateT: 0, move: null, moveT: 0, moveSeq: 0,
     grounded: true, airAttack: false, iframes: 0, speed: 0, runT: 0, runPhase: 0,
-    combo: 0, comboT: 0, kos: 0,
+    combo: 0, comboT: 0, kos: 0, atk: 1, taken: 0,
     buf: null, bufT: 0, dodgeBuf: 0, jumpBuf: 0, musouBuf: 0, dodgeX: 0, dodgeZ: 1,
     musouClip: null, musouT: 0,
     airN: 0, moveAir: false,                                  // combo-system: air-string count, vault
@@ -51,7 +51,7 @@ export function createHero(game) {
   h.reset = ({ x = 0, z = 0, yaw = 0 } = {}) => {
     Object.assign(h, { x, y: 0, z, vx: 0, vy: 0, vz: 0, yaw, hp: h.hpMax, musou: 0, state: 'idle', stateT: 0, move: null,
       moveT: 0, moveSeq: 0, grounded: true, airAttack: false, iframes: 0, speed: 0, runT: 0, runPhase: 0, combo: 0, comboT: 0,
-      kos: 0, buf: null, bufT: 0, dodgeBuf: 0, jumpBuf: 0, musouBuf: 0, musouClip: null, musouT: 0,
+      kos: 0, atk: 1, taken: 0, buf: null, bufT: 0, dodgeBuf: 0, jumpBuf: 0, musouBuf: 0, musouClip: null, musouT: 0,
       airN: 0, moveAir: false, dodgeSeq: 0 });
     Object.assign(h.anim, { id: 'idle', t: 0, k: 0, seq: -1, pid: null, pt: 0, pk: 0, blendF: 1, blendN: 1, yaw, lean: 0, fx: x, fz: z, px: x, pz: z, mf: null, mt: 0, om: null, ot: 0 });
   };
@@ -63,6 +63,8 @@ export function createHero(game) {
   h.hurt = (dmg, fromX, fromZ, officer) => {
     if (h.iframes > 0 || h.state === 'musou' || h.state === 'dodge') return false;
     if (h.state === 'dead') return false;
+    dmg = Math.round(dmg * (game.diff?.dmg ?? 1));            // difficulty (main.js DIFFS)
+    h.taken += Math.min(dmg, h.hp);
     h.hp = Math.max(0, h.hp - dmg);
     h.musou = Math.min(h.musouMax, h.musou + dmg * 0.15);
     const armored = h.hp > 0 && !!h.move && (!officer || MOVES[h.move].armor);

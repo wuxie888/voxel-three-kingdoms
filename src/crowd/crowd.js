@@ -66,6 +66,7 @@ export function createCrowd(game, grunts = 300) {
     waveT: 0, tokensUsed: 0, strikeF: 0, gap: 0, graceF: 0, heroHp: 0, wavesOn: false, engaged: 0,
   };
   const head = new Int32Array(GRID * GRID), next = new Int32Array(N);
+  const scripted = () => !!game.campaign?.active;
   const px = new Float64Array(N), pz = new Float64Array(N), sqAlive = new Int32Array(MAXSQ);
   let holdNear = false;
 
@@ -75,7 +76,7 @@ export function createCrowd(game, grunts = 300) {
     c.x[i] = x; c.z[i] = Math.min(z, WALL_Z - 2.5); c.y[i] = 0; c.vx[i] = c.vz[i] = c.vy[i] = 0;
     c.yaw[i] = Math.atan2(game.hero.x - x, game.hero.z - z);
     c.type[i] = off ? 1 : 0; c.kind[i] = kind;
-    c.hpMax[i] = c.hp[i] = off ? CROWD.officerHp : kind === KIND.CAPTAIN ? CROWD.captainHp : CROWD.hp;
+    c.hpMax[i] = c.hp[i] = off ? CROWD.officerHp * (game.diff?.hp ?? 1) : kind === KIND.CAPTAIN ? CROWD.captainHp : CROWD.hp;
     c.st[i] = engaged ? ST.ADVANCE : ST.IDLE; c.stT[i] = rng.int(0, 60);
     c.token[i] = 0; c.cd[i] = rng.int(0, 120); c.hs[i] = 0; c.flash[i] = 0; c.raiseF[i] = 0; c.feint[i] = 0; c.wind[i] = 0;
     c.rx[i] = c.rxV[i] = c.spinV[i] = 0; c.bounce[i] = 0; c.lastHit[i] = -1; c.kod[i] = 0;
@@ -145,10 +146,26 @@ export function createCrowd(game, grunts = 300) {
       makeSquad(slots.slice(k, k + size), sx, sz, face, big ? 10 : Math.max(4, Math.round(Math.sqrt(size * 1.6))), SQ_HOLD);
       k += size; n++;
     }
+    if (scripted()) return;                                     // a stage script brings the named officers on itself
     for (const i of freeSlots(true)) {
       const a = rng.range(0, Math.PI * 2), d = rng.range(12, 30);
       place(i, cx + Math.cos(a) * d, cz + Math.sin(a) * d, false);
     }
+  };
+
+  /** Named officer k (STAGE.enemy.officers[k]) joins the fight at (x, z) and makes for the hero, hp × hpK; up to
+   *  `escort` free soldiers run in behind him as a column (stage scripts, stages/campaign.js). */
+  c.spawnOfficer = (k, x, z, { hpK = 1, escort = 0 } = {}) => {
+    const i = grunts + k;
+    z = Math.min(z, WALL_Z - 4);
+    place(i, x, z, true);
+    c.hpMax[i] = c.hp[i] = c.hpMax[i] * hpK;
+    const col = freeSlots(false).slice(0, escort);
+    if (col.length >= 4) {
+      const face = Math.atan2(game.hero.x - x, game.hero.z - z);
+      makeSquad(col, x - Math.sin(face) * 3, z - Math.cos(face) * 3, face, 3, SQ_CHARGE);
+    }
+    return i;
   };
 
   /** Ring of engaged soldiers around the hero (crowd-fight / musou scenarios, debug.spawnRing). */
@@ -315,8 +332,8 @@ export function createCrowd(game, grunts = 300) {
         if (c.token[i] && d <= CROWD.attackRange + 0.9 && c.cd[i] === 0 && !h.y && strikers < CROWD.maxStrikers &&
             h.state !== 'hurt' && game.frame - c.strikeF >= (c.type[i] ? c.gap >> 1 : c.gap)) {
           setSt(i, ST.ATTACK); c.wind[i] = 1; c.feint[i] = game.frame < c.graceF ? 1 : 0; strikers++;
-          const g = CROWD.strikeGap[busy ? 1 : 0];
-          c.strikeF = game.frame; c.gap = rng.int(g[0], g[1]);
+          const g = CROWD.strikeGap[busy ? 1 : 0], gk = game.diff?.gap ?? 1;
+          c.strikeF = game.frame; c.gap = Math.round(rng.int(g[0], g[1]) * gk);
           rally(i);
         }
         turn(i, faceTo, CROWD.turn);
@@ -553,8 +570,8 @@ export function createCrowd(game, grunts = 300) {
     if (r > CROWD.fieldR - 4) { sx *= (CROWD.fieldR - 4) / r; sz *= (CROWD.fieldR - 4) / r; }
     sz = Math.min(sz, WALL_Z - 4);
     makeSquad(off.slice(0, n), sx, sz, Math.atan2(h.x - sx, h.z - sz), 3, SQ_CHARGE);   // a column that runs straight in
-    // KO'd officers come back with the waves
-    for (const i of freeSlots(true)) { place(i, sx + rng.range(-2, 2), sz + rng.range(-2, 2), true); break; }
+    // KO'd officers come back with the waves (unless a stage script is bringing them on)
+    if (!scripted()) for (const i of freeSlots(true)) { place(i, sx + rng.range(-2, 2), sz + rng.range(-2, 2), true); break; }
     emit('crowd:wave', { count: n, x: sx, z: sz });
   }
 

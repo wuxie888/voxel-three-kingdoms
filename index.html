@@ -140,6 +140,44 @@
   #hud .h-dlg p { margin: .4rem 0 .35rem; font: 700 2.3rem/1.1 var(--kai); letter-spacing: .12rem; white-space: nowrap; }
   #hud .h-dlg small { font-weight: 600; letter-spacing: .06em; font-size: 1.6rem; white-space: nowrap; color: #f4ead8; }
 
+  /* dialogue speakers: ally officers blue, enemies red (a named officer without a portrait speaks behind a seal) */
+  #hud .h-dlg .seal { display: none; width: 5.6rem; height: 5.6rem; font-size: 3.6rem; writing-mode: horizontal-tb; padding: 0;
+    align-items: center; justify-content: center; }
+  #hud .h-dlg.foe-seal canvas { display: none; }
+  #hud .h-dlg.foe-seal .seal { display: flex; }
+  #hud .h-dlg[data-side="ally"] { border-left-color: #6fa8ff; }
+  #hud .h-dlg[data-side="ally"] b, #hud .h-dlg[data-side="ally"] b span { color: #a8ccff; }
+  #hud .h-dlg[data-side="foe"] { border-left-color: #e0442e; }
+  #hud .h-dlg[data-side="foe"] b, #hud .h-dlg[data-side="foe"] b span { color: #ffb49a; }
+  #hud .h-dlg[data-side="foe"] canvas { background: #3c1a14; }
+  #hud .h-dlg b em { font-style: normal; }
+  /* goal box (stages/campaign.js): under the minimap */
+  #hud .h-goal { right: 2.4%; top: 27.2rem; width: 20rem; display: flex; align-items: flex-start; gap: .8rem; padding: .7rem .9rem .7rem .7rem; opacity: 0;
+    background: linear-gradient(90deg, rgba(10,6,4,.35), rgba(10,6,4,.78)); box-shadow: inset 0 0 0 .1rem rgba(214,184,130,.45); box-sizing: border-box; }
+  #hud .h-goal > div { flex: 1; min-width: 0; }
+  #hud .h-goal .seal { font-size: 1.25rem; padding: .3rem .2rem; flex: none; }
+  #hud .h-goal b { display: block; font: 700 1.9rem/1.15 var(--kai); color: #ffe7a3; letter-spacing: .08rem; word-break: keep-all; }
+  #hud .h-goal small { margin-top: .35rem; font-size: .95rem; letter-spacing: .12em; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #hud .h-goal .pg { font: 800 2rem/1 var(--sans); color: #ffd65a; flex: none; padding-top: .1rem; }
+  #hud .h-goal .cap { position: relative; height: .5rem; margin-top: .5rem; background: rgba(0,0,0,.6); opacity: 0; }
+  #hud .h-goal .cap i { position: absolute; inset: 0; transform-origin: 0 50%; background: linear-gradient(90deg, #ffb03a, #ffe7a3); }
+  #hud .h-goal.done b { color: #b9e8a8; }
+  #hud .h-goal.done b::after { content: " ✔"; color: #8fe07a; }
+  #hud .h-goal.pop { animation: goalPop .45s cubic-bezier(.2, 1.4, .4, 1); }
+  @keyframes goalPop { from { transform: translateX(3rem); filter: brightness(2); } to { transform: none; filter: none; } }
+  #hud .h-band p b.gl { display: inline-block; margin-right: 1.2rem; padding: .2rem .7rem; font: 700 1.9rem/1.2 var(--brush); color: #1a120d;
+    background: linear-gradient(#ffe7a3, #f2c14e 55%, #c98a22); border-radius: .3rem; vertical-align: .2rem; letter-spacing: .2rem; }
+  /* waypoints: a marker over a spot to take, or an arrow at the screen edge toward the goal */
+  #hud .h-ways { inset: 0; }
+  #hud .way { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; }
+  #hud .way i { position: absolute; left: -1.1rem; top: -1.1rem; width: 2.2rem; height: 2.2rem; }
+  #hud .way i::before { content: ""; position: absolute; inset: .3rem; background: #ffd65a; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+    filter: drop-shadow(0 0 .3rem #000); }
+  #hud .way.edge i::before { clip-path: polygon(50% 0, 100% 75%, 50% 55%, 0 75%); }
+  #hud .way b { position: absolute; left: -10rem; width: 20rem; top: 1.4rem; text-align: center; font: 700 1.9rem/1 var(--brush); color: #ffe7a3; }
+  #hud .way span { position: absolute; left: -10rem; width: 20rem; top: 3.6rem; text-align: center; font: 700 1.2rem/1 var(--sans); letter-spacing: .1em; color: #f4ead8; }
+  #hud .way:not(.edge) b { top: -4.4rem; }
+  #hud .way:not(.edge) span { top: -2.3rem; }
   /* musou: concept's vertical copy on the right */
   #hud .h-copy { right: 3.2%; top: 44%; writing-mode: vertical-rl; font: 700 3.4rem/1.3 var(--brush); letter-spacing: .5rem; opacity: 0;
     color: #f7f1e8; text-shadow: 0 0 .1rem #000, .2rem .3rem 0 rgba(0,0,0,.55), 0 0 1.4rem rgba(120,200,255,.5);
@@ -222,6 +260,20 @@
   #menu .stages { margin-top: 1rem; }
   #menu .stages button { min-width: 0; padding: .8rem 1.8rem .7rem; }
   #menu .stages button b { font-size: 2.2rem; }
+  #menu .stages button { position: relative; }
+  /* best rank of the chosen hero on each battle (core/settings.js records) */
+  #menu .stages .rk { position: absolute; right: -.7rem; top: -.9rem; font: 800 2rem/1 "Avenir Next", "Helvetica Neue", sans-serif; font-style: italic;
+    color: #f4ead8; text-shadow: .15rem .2rem 0 rgba(0,0,0,.7); }
+  #menu .stages .rk[data-r="S"] { color: #ffd658; text-shadow: .15rem .2rem 0 rgba(0,0,0,.7), 0 0 1rem rgba(255,200,60,.9); }
+  #menu .stages .rk[data-r="A"] { color: #ff7a52; }
+  #menu .stages .rk[data-r="B"] { color: #8fc4ff; }
+  #menu .diff { display: flex; align-items: center; gap: .8rem; margin: 1.2rem 0 0 .2rem; }
+  #menu .diff > span { font: 700 2.2rem/1 "Kaiti SC", "STKaiti", "KaiTi", "HudBrush", serif; color: #f2c14e; margin-right: .8rem; }
+  #menu .diff > span small { font: 500 1.2rem/1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: .15em; color: #cdbb9c; margin-left: .6rem; }
+  #menu .diff button { margin: 0; padding: .55rem 1.4rem; font-size: 2rem; letter-spacing: .2rem; background: rgba(0,0,0,.45); color: #f4ead8;
+    box-shadow: 0 0 0 .12rem rgba(239,227,207,.28); }
+  #menu .diff button small { margin-left: .6rem; font-size: 1.1rem; }
+  #menu .diff button.on { background: linear-gradient(rgba(179,38,30,.85), rgba(110,20,14,.85)); box-shadow: 0 0 0 .18rem #f2c14e; }
   #menu button small { font: 600 1.4rem/1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: .3em; margin-left: 1rem; }
   #menu .hint { margin: 1.4rem 0 0 .4rem; font: 500 1.35rem/1.5 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: .08em; opacity: .7; }
   /* result card (main.js): 戰死 / 勝利 */
@@ -231,6 +283,20 @@
   #result.win { background: radial-gradient(ellipse at center, rgba(60,40,6,.45), rgba(10,6,2,.85)); }
   #result .big { font: 700 18vh/1 "Xingkai SC", "STXingkai", "HudBrush", serif; letter-spacing: 3vh; color: #e8402c; text-shadow: .6vh .8vh 0 rgba(0,0,0,.6), 0 0 5vh rgba(200,30,10,.6); }
   #result.win .big { color: #f2c14e; text-shadow: .6vh .8vh 0 rgba(0,0,0,.6), 0 0 5vh rgba(240,190,70,.6); }
+  #result .head { display: flex; align-items: center; gap: 5vh; margin-bottom: 1.5vh; }
+  #result .rank { display: flex; flex-direction: column; align-items: center; }
+  #result .rank[hidden] { display: none; }
+  #result .rank b { font: 800 16vh/1 "Avenir Next", "Helvetica Neue", sans-serif; font-style: italic; color: #f4ead8;
+    text-shadow: .5vh .7vh 0 rgba(0,0,0,.6); animation: rankIn .5s cubic-bezier(.2, 1.6, .4, 1) both .25s; }
+  #result .rank[data-r="S"] b { color: #ffd658; text-shadow: .5vh .7vh 0 rgba(0,0,0,.6), 0 0 4vh rgba(255,200,60,.9); }
+  #result .rank[data-r="A"] b { color: #ff7a52; }
+  #result .rank[data-r="B"] b { color: #8fc4ff; }
+  #result .rank small { font: 600 1.5vh/1 "Avenir Next", sans-serif; letter-spacing: .4em; opacity: .75; margin-top: .6vh; }
+  @keyframes rankIn { from { opacity: 0; transform: scale(2.4) rotate(-8deg); } to { opacity: 1; transform: none; } }
+  #result .best { margin-top: 3vh; font: 600 2vh/1 "Avenir Next", sans-serif; letter-spacing: .15em; color: #e8d9bf; min-height: 2vh; }
+  #result .best b { color: #ffe7a3; }
+  #result .best em { font: 700 2.8vh/1 "Xingkai SC", "STXingkai", "HudBrush", serif; font-style: normal; color: #ffd658; letter-spacing: .4vh; margin-right: 1vh;
+    text-shadow: 0 0 2vh rgba(255,200,60,.8); }
   #result .en { font: 600 2.2vh/1 "Avenir Next", sans-serif; letter-spacing: 1em; margin-top: 1.5vh; opacity: .8; }
   #result .stats { display: flex; gap: 5vh; margin-top: 5vh; font: 500 2.6vh/1 "Kaiti SC", "STKaiti", "HudBrush", serif; }
   #result .stats b { font: 700 4vh/1 "Avenir Next", sans-serif; color: #ffe7a3; margin-left: .8vh; }
@@ -255,6 +321,7 @@
   <div class="en">VOXEL THREE KINGDOMS</div>
   <div class="heroes" id="heroes"></div>
   <div class="heroes stages" id="stages"></div>
+  <div class="diff" id="diff"><span>難度<small>DIFFICULTY</small></span></div>
   <div class="sub" id="tagline"></div>
   <table>
     <tr><td>移動<small>MOVE</small></td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows</td></tr>

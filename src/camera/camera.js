@@ -112,6 +112,10 @@ export function createCamSim() {
     if (inp.orbit) { s.yaw += inp.orbit; s.ctrl += inp.orbit; s.manualT = 90; s.look = true; s.seek = false; s.seekV = 0; s.seekCd = CAM.lookHold; }
     else if (s.manualT > 0) s.manualT--;
     else if (h.state === 'musou') { s.yaw += wrap(h.yaw - s.yaw) * 0.08; s.seek = false; s.seekV = 0; }   // Musou chase: end up behind him
+    else if (game.campaign?.focus) {                          // a stage moment (the ally's roar): turn to show it
+      const f = game.campaign.focus;
+      s.yaw += clamp(wrap(Math.atan2(f.x - h.x, f.z - h.z) - s.yaw) * 0.07, -0.06, 0.06); s.seek = false; s.seekV = 0;
+    }
     else {
       // Fight-aware yaw: while he attacks and the view shows under half the soldiers the best view around him would
       // (stick released since the press; else only when it shows almost none of the fight: he ran past the mob), the

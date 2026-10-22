@@ -28,9 +28,11 @@ export function createBoss(game, def) {
     atk: null, ax: 0, az: 0, pause: 0, lastHit: -1, flash: 0, seq: 0, anim: { id: 'idle', t: 0 } };
   const h = game.hero;
 
-  b.reset = () => Object.assign(b, { st: 'off', stT: 0, hp: BOSS.hp, poise: BOSS.poise, atk: null, y: 0, vy: 0, pause: 0, lastHit: -1, flash: 0,
+  b.reset = () => Object.assign(b, { st: 'off', stT: 0, hp: BOSS.hp * (game.diff?.hp ?? 1), hpMax: BOSS.hp * (game.diff?.hp ?? 1), poise: BOSS.poise, atk: null, y: 0, vy: 0, pause: 0, lastHit: -1, flash: 0,
     x: GATE_X * 0.5, z: ARENA_RADIUS + 10, yaw: Math.PI });           // rides in from the gate side, just out of the arena
   b.alive = () => b.st !== 'off' && b.st !== 'dead';
+  /** Ride out now (stage scripts call this when his goal starts; without one he comes on his own, below). */
+  b.summon = () => { b.reset(); set('enter'); emit('boss:enter', { name: def.zh, en: def.en, x: b.x, z: b.z }); };
   b.rage = () => b.hp / b.hpMax < BOSS.rage;
 
   const set = (st) => { b.st = st; b.stT = 0; };
@@ -42,7 +44,7 @@ export function createBoss(game, def) {
   /** Called by combat.strike when a hero hit window covers him. */
   b.hurt = (hit, ox, oz, moveId) => {
     const musou = moveId === 'musou';
-    b.hp = Math.max(0, b.hp - hit.dmg);
+    b.hp = Math.max(0, b.hp - hit.dmg * (h.atk || 1));
     b.flash = 6;
     h.combo++; h.comboT = 90;
     if (h.state !== 'musou') h.musou = Math.min(h.musouMax, h.musou + 0.3);
@@ -80,7 +82,7 @@ export function createBoss(game, def) {
   b.step = () => {
     if (b.flash > 0) b.flash--;
     if (b.st === 'off') {
-      if (game.frame > BOSS.arrive || h.kos >= BOSS.arriveKOs) { b.reset(); set('enter'); emit('boss:enter', { name: def.zh, en: def.en, x: b.x, z: b.z }); }
+      if (!game.campaign?.active && (game.frame > BOSS.arrive || h.kos >= BOSS.arriveKOs)) b.summon();
       return;
     }
     if (game.hitstop > 0) return;

@@ -168,12 +168,13 @@ function fireSystem(scene, list) {
 }
 
 // ---------------------------------------------------------------- camp ring (south + flanks)
-function camp(b, r, gateX) {
+function camp(b, r, gateX, blocked = () => false) {
   const inArc = (a) => Math.cos(a) < 0.45;                              // a = angle from +Z; skip the castle side
   // palisade of sharpened stakes
   for (let a = 0; a < Math.PI * 2; a += 0.0105) {
     if (!inArc(a) || r.chance(0.07)) continue;
     const R = 64 + Math.sin(a * 5) * 2.5, x = Math.sin(a) * R, z = Math.cos(a) * R, hh = r.range(2.3, 3.1);
+    if (blocked(x, z)) continue;
     b.push({ s: [0.34, hh, 0.34], p: [x, hh / 2, z], r: [r.range(-0.08, 0.08), a, r.range(-0.1, 0.1)], c: shade(0x5a3d2a, r.range(0.75, 1.1)) });
     b.push({ s: [0.2, 0.35, 0.2], p: [x, hh + 0.15, z], c: shade(0x6e4c34, r.range(0.8, 1.1)) });
     if (r.chance(0.2)) b.push({ s: [0.22, 0.22, 2.2], p: [x, 1.2, z], r: [0, a + Math.PI / 2, 0], c: 0x3e2a1d });
@@ -183,6 +184,7 @@ function camp(b, r, gateX) {
     const a = Math.PI * (0.62 + r.range(-0.36, 0.36) + (i % 2 ? 0.5 : -0.5) * r.range(0, 0.4)) + (i < 8 ? 0 : Math.PI);
     if (!inArc(a)) continue;
     const R = r.range(72, 98), x = Math.sin(a) * R, z = Math.cos(a) * R;
+    if (blocked(x, z)) continue;
     const col = r.chance(0.5) ? 0x8a3025 : 0xb09a7c, w = r.range(4, 6), d = r.range(4.5, 7);
     for (let k = 0; k < 5; k++) b.push({ s: [w * (1 - k * 0.19), 0.7, d], p: [x, 0.35 + k * 0.7, z], r: [0, a, 0], c: shade(col, 1 - k * 0.04) });
     b.push({ s: [0.2, 4.6, 0.2], p: [x, 2.3, z], c: 0x3a2618 });
@@ -191,7 +193,7 @@ function camp(b, r, gateX) {
   for (let i = 0; i < 14; i++) {
     const a = (i / 14) * Math.PI * 2 + r.range(-0.1, 0.1);
     const x = Math.sin(a) * r.range(49, 53), z = Math.cos(a) * r.range(49, 53);
-    if (z > 30 && Math.abs(x - gateX) < 14) continue;
+    if ((z > 30 && Math.abs(x - gateX) < 14) || blocked(x, z)) continue;
     const yaw = a + Math.PI / 2 + r.range(-0.3, 0.3);
     b.push({ s: [5, 0.34, 0.34], p: [x, 0.55, z], r: [0, yaw, 0], c: 0x4a3222 });
     for (let k = 0; k < 5; k++) {
@@ -204,6 +206,7 @@ function camp(b, r, gateX) {
     const a = r.range(0, Math.PI * 2);
     if (!inArc(a)) continue;
     const R = r.range(55, 62), x = Math.sin(a) * R, z = Math.cos(a) * R, s = r.range(0.7, 1.1);
+    if (blocked(x, z)) continue;
     b.push({ s: [s, s, s], p: [x, s / 2, z], r: [0, r.range(0, 3), 0], c: shade(0x6e5038, r.range(0.8, 1.1)) });
     if (r.chance(0.5)) b.push({ s: [s * 0.8, s * 0.8, s * 0.8], p: [x + 0.2, s + s * 0.4, z], r: [0, r.range(0, 3), 0], c: shade(0x5a4030, r.range(0.8, 1.1)) });
   }
@@ -319,7 +322,7 @@ export function buildDressing(scene, { wallZ, gateX, castle, fieldFires, extraFi
   }
 
   const props = [];
-  camp(props, r, gateX);
+  camp(props, r, gateX, blocked);
   // battle debris, all low so nothing blocks the fight: arrow volleys stuck in the ground, wrecked carts under the
   // field fires, rubble at the wall foot
   for (let c = 0; c < 26; c++) {

@@ -285,6 +285,23 @@ export function createPost({ canvas, enabled = true, width, height }) {
     renderer, bloom, enabled,
     setSize,
     flash(v) { flash = v; },
+    /** Boot, behind the title menu: one offscreen frame with every hidden object shown and nothing culled, so each
+     *  program (pools, the boss, telegraphs, projectiles) compiles and each buffer/texture uploads now instead of
+     *  hitching the first hit, the first projectile or the boss's entrance. Targets sceneRT: the program key depends on
+     *  the render target (tone mapping / output colour space). */
+    warm(scene, camera) {
+      const shown = [], culled = [];
+      scene.traverse((o) => {
+        if (!o.visible) { o.visible = true; shown.push(o); }
+        if (o.frustumCulled) { o.frustumCulled = false; culled.push(o); }
+      });
+      renderer.setRenderTarget(enabled ? sceneRT : null);
+      renderer.compile(scene, camera);
+      renderer.render(scene, camera);
+      renderer.setRenderTarget(null);
+      for (const o of shown) o.visible = false;
+      for (const o of culled) o.frustumCulled = true;
+    },
     /** focus: world point the camera frames (hero) → DoF focus plane; sunDir: world sun direction → haze glow. */
     render(scene, camera, time = 0, focus = null, sunDir = null) {
       renderer.info.reset();
