@@ -74,7 +74,7 @@ export function stepLocomotion(h, inp, camYaw) {
     else { h.vx *= 0.75; h.vz *= 0.75; h.speed = Math.hypot(h.vx, h.vz); h.anim.lean *= 0.7; return; }
   }
   if (!h.grounded) {                       // air control (momentum from the run carries)
-    const tvx = dx * LOCO.runSpeed * mag, tvz = dz * LOCO.runSpeed * mag;
+    const tvx = dx * LOCO.runSpeed * (h.spdK || 1) * mag, tvz = dz * LOCO.runSpeed * (h.spdK || 1) * mag;
     if (mag) {
       h.vx += Math.max(-LOCO.airControl * DT, Math.min(LOCO.airControl * DT, tvx - h.vx));
       h.vz += Math.max(-LOCO.airControl * DT, Math.min(LOCO.airControl * DT, tvz - h.vz));
@@ -90,7 +90,7 @@ export function stepLocomotion(h, inp, camYaw) {
     if (sp0 < 1.5 && h.state !== 'run') h.yaw = want;          // from a standstill: face the stick at once
     else turnToward(h, want, LOCO.turnRate * DT);
     const left = Math.abs(wrap(want - h.yaw));                  // still turning → shed some speed (no skid)
-    const target = LOCO.runSpeed * mag * (1 - LOCO.turnSlow * left / Math.PI);
+    const target = LOCO.runSpeed * (h.spdK || 1) * mag * (1 - LOCO.turnSlow * left / Math.PI);   // 疾風 gear: spdK
     sp = sp0 + clamp(target - sp0, -LOCO.decel * DT, LOCO.accel * DT);
     h.vx = Math.sin(h.yaw) * sp; h.vz = Math.cos(h.yaw) * sp;  // velocity follows facing: tight arc, no drift
     setState(h, 'run');

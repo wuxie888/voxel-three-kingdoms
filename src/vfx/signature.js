@@ -117,6 +117,22 @@ export function createSignatureFx(scene, game, vfx, camera) {
       fx.ring(x, z, r, 0.6, rgb(c, 0.9)); fx.embers(x, 0.6, z, 30, 1.6, rgb(c)); fx.star(x, 1.4, z, 2, 0.4, rgb(k, 0.8));
     }
   });
+  // weapon attributes (combat.js elements): fire bursts, ice crystals, thunder arcs, the 斬 slash — at most 3 of a kind a
+  // frame (a charge through a packed ring fires dozens)
+  const elemN = {}; let elemF = -1;
+  on('elem', (e) => {
+    if (elemF !== game.frame) { elemF = game.frame; for (const k in elemN) elemN[k] = 0; }
+    if ((elemN[e.kind] = (elemN[e.kind] || 0) + 1) > 3) return;
+    if (e.kind === 'fire') { fx.star(e.x, e.y, e.z, 1.2, 0.18, [2.6, 1.0, 0.3]); fx.embers(e.x, e.y, e.z, 10, 0.6, [2.6, 1.0, 0.3]); }
+    else if (e.kind === 'ice') { fx.star(e.x, e.y, e.z, 1.1, 0.3, [1.0, 2.0, 2.6]); fx.embers(e.x, e.y + 0.3, e.z, 8, 0.5, [1.2, 2.0, 2.6]); }
+    else if (e.kind === 'cut') { fx.star(e.x, e.y, e.z, 1.6, 0.16, [2.6, 0.6, 0.6]); }
+    else if (e.kind === 'thunder') {
+      const dx = e.tx - e.x, dz = e.tz - e.z, len = Math.hypot(dx, dz);
+      shaft(e.x, e.y, e.z, Math.atan2(dx, dz), len, 0.12);
+      fx.star(e.tx, e.ty, e.tz, 0.9, 0.14, [2.6, 2.4, 0.9]);
+    }
+  });
+  on('loot', (e) => { fx.columns(e.x, e.z, 1, 0, 6, 0.7, 0.6, [2.2, 1.8, 0.8], 0); fx.star(e.x, 1.2, e.z, 2.2, 0.4, [2.4, 2.0, 0.9]); });
   // an officer's guard: a white-hot clash on the block, a burst and a ring when the third block breaks it
   on('block', (e) => { fx.star(e.x, e.y, e.z, 0.9, 0.12, [2.4, 2.3, 2.0]); fx.embers(e.x, e.y, e.z, 6, 0.4, [2.2, 1.8, 1.2]); });
   on('officer:break', (e) => { fx.ring(e.x, e.z, 3.2, 0.4, [2.4, 0.5, 0.25]); fx.star(e.x, e.y, e.z, 1.8, 0.3, [2.4, 0.6, 0.3]); fx.dustRing(e.x, e.z, 12, 0.5, 4, 0.45, 0.5); });

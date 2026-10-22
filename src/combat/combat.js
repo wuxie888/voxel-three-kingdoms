@@ -179,9 +179,48 @@ export function createCombat(game) {
     emit('officer:break', { i, x: c.x[i], y: 1.4, z: c.z[i] });
     return true;
   }
-  /** The hero's damage multiplier: the stage buff (青釭劍) × the 虎符 supply (attack ×2 while it lasts). */
-  const atkK = (h) => (h.atk || 1) * (h.buffAtk > 0 ? 2 : 1);
+  /** The hero's damage multiplier: the stage buff (青釭劍) × the 虎符 supply (attack ×2 while it lasts) × his level and
+   *  weapon (h.gear, progress/profile.js gearOf). */
+  const atkK = (h) => (h.atk || 1) * (h.buffAtk > 0 ? 2 : 1) * (1 + (h.gear?.atk || 0));
   cb.atkK = atkK;
+
+  // Weapon attributes (屬性, progress/loot.js): 斬 and 吸 on any blow; 炎 冰 雷 on charge attacks (DW). Deterministic:
+  // chances from hashes of the victim and the frame. 雷 arcs from at most two victims per frame, never off an arc.
+  let zapF = -1, zapN = 0, leechF = 0, leechSum = 0;
+  const isCharge = (id) => !!MOVES[id] && (id[0] === 'c' || id === 'jc');
+  function elements(i, hit, dmg, moveId) {
+    const G = game.hero.gear, c = game.crowd;
+    if (!G || !MOVES[moveId]) return dmg;
+    if (G.cut && hash01(i, game.frame, 23) < G.cut) { dmg *= 3; emit('elem', { kind: 'cut', x: c.x[i], y: c.y[i] + 1.2, z: c.z[i] }); }
+    if (isCharge(moveId)) {
+      if (G.fire) { dmg *= 1 + G.fire; emit('elem', { kind: 'fire', x: c.x[i], y: c.y[i] + 1, z: c.z[i] }); }
+      if (G.ice) { c.frozen[i] = Math.max(c.frozen[i], Math.round(G.ice * 60)); emit('elem', { kind: 'ice', x: c.x[i], y: c.y[i] + 1, z: c.z[i] }); }
+    }
+    if (G.leech) {                                             // ≤ 12 HP a second
+      if (game.frame - leechF >= 60) { leechF = game.frame; leechSum = 0; }
+      const v = Math.min(dmg * G.leech, 12 - leechSum);
+      if (v > 0) { leechSum += v; const h = game.hero; h.hp = Math.min(h.hpMax, h.hp + v); }
+    }
+    return dmg;
+  }
+  function thunder(i, hit, moveId, yaw) {
+    const G = game.hero.gear, c = game.crowd;
+    if (!G?.thunder || !isCharge(moveId)) return;
+    if (zapF !== game.frame) { zapF = game.frame; zapN = 0; }
+    if (zapN++ >= 2) return;
+    const near = [];
+    for (let j = 0; j < c.N; j++) {
+      if (j === i || c.st[j] === ST.OFF || c.st[j] === ST.DEAD) continue;
+      const d2 = (c.x[j] - c.x[i]) ** 2 + (c.z[j] - c.z[i]) ** 2;
+      if (d2 < 25) near.push([d2, j]);
+    }
+    near.sort((a, b) => a[0] - b[0]);
+    const arc = { dmg: hit.dmg * G.thunder, kb: 'flinch', force: 1.5 };
+    for (const [, j] of near.slice(0, 3)) {
+      emit('elem', { kind: 'thunder', x: c.x[i], y: c.y[i] + 1.1, z: c.z[i], tx: c.x[j], ty: c.y[j] + 1.1, tz: c.z[j] });
+      applyHit(j, arc, c.x[i], c.z[i], yaw, 'thunder');
+    }
+  }
 
   function applyHit(i, hit, ox, oz, yaw, moveId) {
     const c = game.crowd, h = game.hero;
@@ -194,7 +233,7 @@ export function createCombat(game) {
     if (hit.shape === 'line') { dx = dx * 0.35 + Math.sin(yaw) * 0.65; dz = dz * 0.35 + Math.cos(yaw) * 0.65; }
     const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
 
-    c.hp[i] -= hit.dmg * atkK(h);
+    c.hp[i] -= elements(i, hit, hit.dmg * atkK(h), moveId);
     // hot silhouette only on a fresh contact (hitfx.js); rapid re-hits (multi-hit moves, juggles) just refresh the tint.
     // Heavy hits tint 3 sf longer and deeper (amber).
     c.flash[i] = c.flash[i] > COMBAT.tintFrames / 2 ? COMBAT.tintFrames - 2 : COMBAT.tintFrames + (hit.heavy ? 3 : 0);
@@ -263,14 +302,17 @@ export function createCombat(game) {
         airborne(i, (lift || 4) * k[1], force * k[0], bx, bz, false, 1.2 + flips, sgn * (hit.heavy ? 4 + 4 * var01 : 2.5));
       }
     }
-    // hero rewards
+    // hero rewards (his gear's 無雙 lines add to the gain)
     h.combo++; h.comboT = COMBAT.comboWindow;
-    if (h.state !== 'musou') h.musou = Math.min(h.musouMax, h.musou + COMBAT.musouPerHit + (killed ? COMBAT.musouPerKO : 0));
+    const mk = 1 + (h.gear?.mus || 0) + (h.gear?.musou || 0);
+    if (h.state !== 'musou') h.musou = Math.min(h.musouMax, h.musou + (COMBAT.musouPerHit + (killed ? COMBAT.musouPerKO : 0)) * mk);
     emit('hit', { i, x: c.x[i], y: c.y[i] + 1.1, z: c.z[i], dx, dz, dmg: hit.dmg, kb, move: moveId, combo: h.combo, killed, officer, heavy: !!hit.heavy });
     if (killed) {
       h.kos++;
+      if (officer) h.officerKOs = (h.officerKOs || 0) + 1;
       emit('ko', { i, x: c.x[i], y: c.y[i] + 0.9, z: c.z[i], dx, dz, type: c.type[i], total: h.kos, officer });
     }
+    thunder(i, hit, moveId, yaw);
     return killed;
   }
 
@@ -342,7 +384,7 @@ export function createCombat(game) {
     if (game.freeze > 0) return;
     for (let i = 0; i < c.N; i++) {
       const s = c.st[i];
-      if (s < ST.HURT || s > ST.DEAD || c.hs[i] > 0) continue;
+      if (s < ST.HURT || s > ST.DEAD || c.hs[i] > 0 || c.frozen[i] > 0) continue;
       if (s === ST.HURT) {
         c.x[i] += c.vx[i] * DT; c.z[i] += c.vz[i] * DT; c.vx[i] *= COMBAT.flinchDamp; c.vz[i] *= COMBAT.flinchDamp;
         if (c.stT[i] >= c.hurtDur[i]) { c.st[i] = ST.GUARD; c.stT[i] = 0; }

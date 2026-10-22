@@ -30,10 +30,11 @@ const CARRY = mkCarry(HERO.moveset);
 export function carryFor(def) { return mkCarry(def.moveset); }
 const MOVE_FEET = OWN ? {} : SPEAR_FEET;
 
+export const HP0 = 400;                                      // base health; level and gear add to it (hero.gear)
 export function createHero(game) {
   const h = {
     x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0,
-    hp: 400, hpMax: 400, musou: 0, musouMax: 100,
+    hp: HP0, hpMax: HP0, musou: 0, musouMax: 100, gear: null, spdK: 1, officerKOs: 0,
     state: 'idle', stateT: 0, move: null, moveT: 0, moveSeq: 0,
     grounded: true, airAttack: false, iframes: 0, speed: 0, runT: 0, runPhase: 0,
     combo: 0, comboT: 0, kos: 0, atk: 1, taken: 0, buffAtk: 0, buffDef: 0, hurtF: -99,   // buffs: frames left (supplies/supplies.js)
@@ -51,7 +52,7 @@ export function createHero(game) {
   h.reset = ({ x = 0, z = 0, yaw = 0 } = {}) => {
     Object.assign(h, { x, y: 0, z, vx: 0, vy: 0, vz: 0, yaw, hp: h.hpMax, musou: 0, state: 'idle', stateT: 0, move: null,
       moveT: 0, moveSeq: 0, grounded: true, airAttack: false, iframes: 0, speed: 0, runT: 0, runPhase: 0, combo: 0, comboT: 0,
-      kos: 0, atk: 1, taken: 0, buffAtk: 0, buffDef: 0, hurtF: -99, buf: null, bufT: 0, dodgeBuf: 0, jumpBuf: 0, musouBuf: 0, musouClip: null, musouT: 0,
+      kos: 0, officerKOs: 0, atk: 1, taken: 0, buffAtk: 0, buffDef: 0, hurtF: -99, buf: null, bufT: 0, dodgeBuf: 0, jumpBuf: 0, musouBuf: 0, musouClip: null, musouT: 0,
       airN: 0, moveAir: false, dodgeSeq: 0 });
     Object.assign(h.anim, { id: 'idle', t: 0, k: 0, seq: -1, pid: null, pt: 0, pk: 0, blendF: 1, blendN: 1, yaw, lean: 0, fx: x, fz: z, px: x, pz: z, mf: null, mt: 0, om: null, ot: 0 });
   };
@@ -67,7 +68,8 @@ export function createHero(game) {
     // a blow taken through armour still buys 0.4 s: a multi-tick strike (the boss's sweep) lands once, not four times
     if (game.frame - h.hurtF < 24) return false;
     h.hurtF = game.frame;
-    dmg = Math.round(dmg * (game.diff?.dmg ?? 1) * (h.buffDef > 0 ? 0.5 : 1));   // difficulty (core/settings.js), 玄甲 halves it
+    // difficulty (core/settings.js), 玄甲 halves it, his level and gear take their share (progress/profile.js)
+    dmg = Math.round(dmg * (game.diff?.dmg ?? 1) * (h.buffDef > 0 ? 0.5 : 1) * (1 - (h.gear?.def || 0)));
     h.taken += Math.min(dmg, h.hp);
     h.hp = Math.max(0, h.hp - dmg);
     h.musou = Math.min(h.musouMax, h.musou + dmg * 0.15);

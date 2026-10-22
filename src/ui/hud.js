@@ -11,6 +11,7 @@ import { HERO, HEROES } from '../heroes/index.js';
 import { STAGE } from '../stages/index.js';
 import { forHero } from '../stages/campaign.js';
 import { ITEMS, BUFF } from '../supplies/supplies.js';
+import { RARITY } from '../progress/loot.js';
 import { ST } from '../crowd/crowd.js';
 import { ARENA_RADIUS, WALL_Z, GATE_X } from '../world/world.js';
 
@@ -39,7 +40,7 @@ export function createHud(root, game, { camera = null } = {}) {
     <div class="h-goal"><i class="seal">目標</i><div><b></b><small></small><div class="cap"><i></i></div></div><span class="pg"></span></div>
     <div class="h-ways">${[0, 1, 2].map(() => '<div class="way"><i></i><b></b><span></span></div>').join('')}</div>
     <div class="h-copy">${HERO.copy}</div>
-    <div class="h-player"><div class="badge"><canvas width="20" height="20"></canvas></div><div class="name">${HERO.zh}</div>
+    <div class="h-player"><div class="badge"><canvas width="20" height="20"></canvas></div><div class="name">${HERO.zh}<small class="lv"></small></div>
       <div class="bar hp"><em></em><i></i></div>
       <div class="mu"><div><i></i></div><div><i></i></div><div><i></i></div><span>無雙</span></div></div>
     <div class="h-buffs"><div class="bf atk"><b>虎符</b><span>攻×2</span><i></i></div><div class="bf def"><b>玄甲</b><span>防×2</span><i></i></div></div>
@@ -54,7 +55,7 @@ export function createHud(root, game, { camera = null } = {}) {
   const dlg = $('.h-dlg'), dlgP = $('.h-dlg p'), dlgS = $('.h-dlg small'), copy = $('.h-copy');
   const dlgCv = $('.h-dlg canvas'), dlgSeal = $('.h-dlg .seal'), dlgName = $('.h-dlg b em'), dlgEn = $('.h-dlg b span');
   const buffs = [['buffAtk', $('.bf.atk')], ['buffDef', $('.bf.def')]].map(([k, el]) => ({ k, el, bar: el.querySelector('i') }));
-  const toast = $('.h-toast'), toastB = $('.h-toast b'), toastS = $('.h-toast small');
+  const toast = $('.h-toast'), toastB = $('.h-toast b'), toastS = $('.h-toast small'), lvEl = $('.name .lv');
   const goalEl = $('.h-goal'), goalB = $('.h-goal b'), goalS = $('.h-goal small'), goalPg = $('.h-goal .pg'), goalCap = $('.h-goal .cap'), goalCapI = $('.h-goal .cap i');
   const ways = $$('.h-ways .way').map((el) => ({ el, i: el.querySelector('i'), b: el.querySelector('b'), sp: el.querySelector('span') }));
   const target = $('.h-target'), targetB = $('.h-target b'), targetS = $('.h-target span'), targetI = $('.h-target .bar i'), targetE = $('.h-target .bar em');
@@ -110,7 +111,13 @@ export function createHud(root, game, { camera = null } = {}) {
   on('goal:done', (e) => { if (e.goal.kind !== 'officer') banner(`${goalText(e.goal)[0]} <em>達成</em>`, 'Objective complete', 140); });
   on('buff', () => banner('奪得 <em>青釭劍</em> · 攻擊力上昇', 'The Qinggang sword — attack up', 160));
   // supplies: what he just took, over his feet (food shows the HP it gave back)
+  on('loot', (e) => {                                           // a chest: the piece, in its rarity's colour
+    const it = e.item, R = RARITY[it.r];
+    text(toastB, `獲得 ${'★'.repeat(it.r)} ${it.name}`); text(toastS, `${R.en} · ${it.kind === 'weapon' ? 'WEAPON' : 'ACCESSORY'} → 武庫`);
+    toast.dataset.k = 'loot'; toast.style.setProperty('--rc', R.col); S.toastF = game.frame;
+  });
   on('pickup', (e) => {
+    if (e.kind === 'chest') return;                             // the loot toast tells it
     const I = ITEMS[e.kind];
     text(toastB, I.heal ? `${I.zh} +${Math.round(e.v)}` : `${I.zh} · ${I.fx}`);
     text(toastS, I.en); toast.dataset.k = e.kind; S.toastF = game.frame;
@@ -273,6 +280,7 @@ export function createHud(root, game, { camera = null } = {}) {
       const copyA = inMusou || me < 30 ? Math.min(clamp01((mf - 8) / 14), me >= 0 && me < 30 ? 1 - me / 30 : 1) : 0;
       set(copy, 'opacity', copyA.toFixed(2));
 
+      text(lvEl, h.gear ? `Lv ${h.gear.lv}` : '');
       // buffs (虎符 / 玄甲): a chip each above the HP bar with its time draining; blinks in the last 3 s
       for (const b of buffs) {
         const left = h[b.k];

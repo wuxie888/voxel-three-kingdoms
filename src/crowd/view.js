@@ -461,6 +461,7 @@ export function createCrowdView(scene, game) {
     const f = tint[i], cap = kind === KIND.CAPTAIN;
     _ch.setRGB(f, f * 0.98, f * 0.95);
     hitGlow(crowd, i, _g);
+    if (crowd.frozen[i] > 0) { _ch.setRGB(f * 0.55, f * 0.8, f * 1.25); _g[0] = 0.1; _g[1] = 0.32; _g[2] = 0.6; }   // 冰: frozen solid
     // telegraph: the last 14 sf of a blow that will really come (feints don't flare)
     const hotStrike = s === ST.ATTACK && !crowd.feint[i] && t >= CROWD.windup - 14 && t < CROWD.windup;
     if (cap) _c.setRGB(_ch.r * 1.45, _ch.g * 1.1, _ch.b * 0.7); else _c.copy(_ch);                  // captains: bronze armour

@@ -5,8 +5,8 @@ import * as THREE from 'three';
 import { on } from '../core/events.js';
 import { boxesGeometry } from '../core/voxel.js';
 
-const GLOW = { bun: 0xffd070, feast: 0xffb040, wine: 0x9ad8ff, tiger: 0xff6a3a, armor: 0x8ab0ff };
-const BURST = { bun: [2.0, 1.6, 0.8], feast: [2.2, 1.6, 0.6], wine: [0.9, 1.8, 2.4], tiger: [2.4, 0.9, 0.4], armor: [1.0, 1.4, 2.4] };
+const GLOW = { bun: 0xffd070, feast: 0xffb040, wine: 0x9ad8ff, tiger: 0xff6a3a, armor: 0x8ab0ff, chest: 0xffe080 };
+const BURST = { bun: [2.0, 1.6, 0.8], feast: [2.2, 1.6, 0.6], wine: [0.9, 1.8, 2.4], tiger: [2.4, 0.9, 0.4], armor: [1.0, 1.4, 2.4], chest: [2.4, 2.0, 0.9] };
 const LIFE = 60 * 30;
 
 const bun = (x, y, z, k = 1) => [
@@ -28,6 +28,9 @@ const GEO = {
   armor: () => boxesGeometry([{ s: [0.56, 0.5, 0.22], p: [0, 0.4, 0], c: 0x2a2c34 }, { s: [0.6, 0.06, 0.24], p: [0, 0.66, 0], c: 0xc8a040 },
     ...[0.22, 0.34, 0.46, 0.58].map((y) => ({ s: [0.58, 0.03, 0.24], p: [0, y, 0], c: 0x4a4e5a })), { s: [0.22, 0.2, 0.26], p: [-0.38, 0.6, 0], c: 0x32343e },
     { s: [0.22, 0.2, 0.26], p: [0.38, 0.6, 0], c: 0x32343e }, { s: [0.14, 0.14, 0.04], p: [0, 0.42, 0.12], c: 0xc8a040 }]),
+  chest: () => boxesGeometry([{ s: [0.8, 0.42, 0.56], p: [0, 0.21, 0], c: 0x7a2a1a }, { s: [0.82, 0.18, 0.58], p: [0, 0.5, 0], c: 0x8e3220 },
+    { s: [0.84, 0.06, 0.6], p: [0, 0.42, 0], c: 0xe0b040 }, { s: [0.06, 0.62, 0.6], p: [-0.3, 0.3, 0], c: 0xe0b040 }, { s: [0.06, 0.62, 0.6], p: [0.3, 0.3, 0], c: 0xe0b040 },
+    { s: [0.16, 0.16, 0.04], p: [0, 0.36, 0.3], c: 0xf0d070 }, { s: [0.06, 0.08, 0.05], p: [0, 0.33, 0.32], c: 0x3a2410 }]),
 };
 function jarGeometry() {
   return boxesGeometry([{ s: [0.5, 0.14, 0.5], p: [0, 0.07, 0], c: 0x6a4228 }, { s: [0.74, 0.46, 0.74], p: [0, 0.37, 0], c: 0x8a5a34 },

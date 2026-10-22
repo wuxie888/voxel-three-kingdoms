@@ -64,6 +64,7 @@ export function createCrowd(game, grunts = 300) {
     sq: { x: F(MAXSQ), z: F(MAXSQ), face: F(MAXSQ), st: I(MAXSQ), t: I(MAXSQ), n: 0 },
     raiseF: I(), feint: I(), wind: I(),                         // raiseF: rallying until (render + ring surge); feint strike; winding up
     armorF: I(),                                                // officers: armoured (no stagger) until this frame (combat breakout)
+    frozen: I(),                                                // frames left frozen solid (冰 weapons, combat.js): no AI, no reaction
     waveT: 0, tokensUsed: 0, strikeF: 0, gap: 0, graceF: 0, heroHp: 0, wavesOn: false, engaged: 0,
   };
   const head = new Int32Array(GRID * GRID), next = new Int32Array(N);
@@ -79,7 +80,7 @@ export function createCrowd(game, grunts = 300) {
     c.type[i] = off ? 1 : 0; c.kind[i] = kind;
     c.hpMax[i] = c.hp[i] = off ? CROWD.officerHp * (game.diff?.hp ?? 1) : kind === KIND.CAPTAIN ? CROWD.captainHp : CROWD.hp;
     c.st[i] = engaged ? ST.ADVANCE : ST.IDLE; c.stT[i] = rng.int(0, 60);
-    c.token[i] = 0; c.cd[i] = rng.int(0, 120); c.hs[i] = 0; c.flash[i] = 0; c.raiseF[i] = 0; c.feint[i] = 0; c.wind[i] = 0; c.armorF[i] = 0;
+    c.token[i] = 0; c.cd[i] = rng.int(0, 120); c.hs[i] = 0; c.flash[i] = 0; c.raiseF[i] = 0; c.feint[i] = 0; c.wind[i] = 0; c.armorF[i] = 0; c.frozen[i] = 0;
     c.rx[i] = c.rxV[i] = c.spinV[i] = 0; c.bounce[i] = 0; c.lastHit[i] = -1; c.kod[i] = 0;
     const r = rng.next();
     if (kind === KIND.BEARER) { c.band[i] = 2; c.pref[i] = rng.range(7, 11); }
@@ -232,6 +233,7 @@ export function createCrowd(game, grunts = 300) {
       if (s === ST.OFF) continue;
       if (c.flash[i] > 0) c.flash[i]--;
       if (c.hs[i] > 0) { c.hs[i]--; continue; }
+      if (c.frozen[i] > 0) { c.frozen[i]--; if (c.wind[i]) c.wind[i] = 0; continue; }   // iced: no step, no swing
       if (frozen) continue;
       c.stT[i]++;
       if (s === ST.DEAD) {

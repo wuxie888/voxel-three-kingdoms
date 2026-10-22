@@ -6,7 +6,7 @@ import { emit } from './core/events.js';
 import { createInput } from './core/input.js';
 import { createPost } from './post/post.js';
 import { createWorld } from './world/world.js';
-import { createHero, createHeroView, updateAnim } from './hero/hero.js';
+import { createHero, createHeroView, updateAnim, HP0 } from './hero/hero.js';
 import { MOVES } from './hero/moves.js';
 import { createCrowd } from './crowd/crowd.js';
 import { createCrowdView } from './crowd/view.js';
@@ -29,6 +29,8 @@ import { on } from './core/events.js';
 import { createCampaign } from './stages/campaign.js';
 import { createProps } from './stages/props.js';
 import { createTouch } from './ui/touch.js';
+import { createArmory, itemCard } from './ui/armory.js';
+import { gearOf, addXP, heroP } from './progress/profile.js';
 import { DIFFS, QUALITY, settings, saveSettings, bestOf, keepBest, rankOf } from './core/settings.js';
 
 const params = new URLSearchParams(location.search);
@@ -132,13 +134,16 @@ const clock = (sec) => { const s = Math.round(sec); return `${Math.floor(s / 60)
 const result = (() => {
   const el = document.createElement('div');
   el.id = 'result'; el.hidden = true;
-  el.innerHTML = '<div class="head"><div class="big"></div><div class="rank"><b></b><small>評價 RANK</small></div></div><div class="en"></div><div class="stats"></div><div class="best"></div><div class="btns"><button data-a="retry">再戰<small>RETRY · Enter</small></button><button data-a="menu">選將<small>HEROES · Esc</small></button><button data-a="go">繼續<small>CONTINUE</small></button></div>';
+  el.innerHTML = '<div class="head"><div class="big"></div><div class="rank"><b></b><small>評價 RANK</small></div></div><div class="en"></div><div class="stats"></div><div class="best"></div><div class="xpgain"></div><div class="loot"></div><div class="btns"><button data-a="retry">再戰<small>RETRY · Enter</small></button><button data-a="menu">選將<small>HEROES · Esc</small></button><button data-a="go">繼續<small>CONTINUE</small></button></div>';
   document.body.appendChild(el);
   const big = el.querySelector('.big'), rankEl = el.querySelector('.rank'), rankB = el.querySelector('.rank b');
   const en = el.querySelector('.en'), stats = el.querySelector('.stats'), best = el.querySelector('.best'), cont = el.querySelector('[data-a="go"]');
-  let maxCombo = 0, open = false, t0 = 0;
+  const xpEl = el.querySelector('.xpgain'), lootEl = el.querySelector('.loot');
+  let maxCombo = 0, open = false, t0 = 0, loot = [], paid = false;
   on('hit', () => { maxCombo = Math.max(maxCombo, game.hero.combo); });
-  on('scenario', () => { maxCombo = 0; });
+  on('scenario', () => { maxCombo = 0; loot = []; paid = false; });
+  on('loot', (e) => loot.push(e.item));
+  const RANK_XP = { S: 700, A: 480, B: 320, C: 200 };
   const show = (win, delay, clear = null) => setTimeout(() => {
     if (open || (!win && game.hero.state !== 'dead')) return;
     big.textContent = win ? '勝利' : '戰死'; en.textContent = win ? `VICTORY · ${STAGE.en}` : 'FALLEN IN BATTLE';
@@ -154,6 +159,16 @@ const result = (() => {
       best.innerHTML = isNew ? '<em>新紀錄</em> NEW RECORD' : `最佳紀錄 BEST · <b>${b.rank}</b> · ${clock(b.time)} · ${DIFFS[b.diff]?.zh || ''}`;
       paintBest();
     }
+    // experience: KOs, officers, the rank (a fall still earns half) — once per battle
+    if (!paid) {
+      paid = true;
+      const h = game.hero, rk = rankEl.dataset.r;
+      const xp = (h.kos + h.officerKOs * 15 + (clear ? RANK_XP[rk] || 200 : 0)) * (win ? 1 : 0.5) * (game.diff.id === 'hard' ? 1.3 : game.diff.id === 'easy' ? 0.8 : 1);
+      const r = addXP(HERO.id, xp);
+      xpEl.innerHTML = `經驗 <b>+${r.gained}</b>` + (r.lv > r.lv0 ? ` · <em>等級提升 Lv ${r.lv0} → ${r.lv}</em>` : ` · Lv ${r.lv}`);
+      paintLv();
+    }
+    lootEl.innerHTML = loot.length ? `<small>獲得裝備 LOOT</small><div>${loot.map((it) => itemCard(it)).join('')}</div>` : '';
     el.hidden = false; open = true; hudEl.hidden = true; document.body.classList.add('result');
   }, delay);
   on('hero:death', () => show(false, 1800));
@@ -173,9 +188,16 @@ const result = (() => {
   return r;
 })();
 
+/** His level and loadout (progress/profile.js) onto the sim hero: health, run speed; combat reads hero.gear. */
+function applyGear(keepHp = false) {
+  const h = game.hero, G = gearOf(HERO.id), k = h.hpMax ? h.hp / h.hpMax : 1;
+  h.gear = G; h.hpMax = HP0 + G.hp; h.spdK = 1 + G.spd;
+  if (keepHp) h.hp = Math.min(h.hpMax, Math.round(h.hpMax * k));
+}
 function start() {
   rng.seed(1); vrng.seed(7936);
   result.hide();
+  applyGear();
   game.hero.reset();
   game.crowd.reset(); game.combat.reset(); game.musou.reset(); game.cam.reset(0);
   if (game.boss) game.boss.reset(), game.boss.st = 'off';
@@ -208,7 +230,12 @@ const card = (row, on, html, fn) => {
   document.getElementById(row).appendChild(b);
   return b;
 };
-for (const h of HEROES) paintPortrait(card('heroes', h === HERO, `<canvas width="20" height="20"></canvas><span><b>${h.zh}</b><small>${h.weapon}</small><small>${h.role}</small></span>`, () => pickHero(h.id)).firstChild, h);
+const heroCards = HEROES.map((h) => { const b = card('heroes', h === HERO, `<canvas width="20" height="20"></canvas><span><b>${h.zh}</b><small>${h.weapon}</small><small>${h.role}</small></span><i class="lvb"></i>`, () => pickHero(h.id)); paintPortrait(b.firstChild, h); return b; });
+/** Each officer's level on his card (progress/profile.js). */
+function paintLv() { HEROES.forEach((h, k) => { heroCards[k].querySelector('.lvb').textContent = `Lv ${heroP(h.id).lv}`; }); }
+paintLv();
+const armory = createArmory({ onChange: () => applyGear(true) });
+document.getElementById('arm').addEventListener('click', (e) => { e.stopPropagation(); armory.open(); });
 const stageCards = STAGES.map((s) => card('stages', s === STAGE, `<span><b>${s.zh}</b><small>${s.time} · ${s.enemy.army}</small></span><i class="rk"></i>`, () => pickStage(s.id)));
 /** Best rank of the chosen hero on each battle card. */
 function paintBest() {
