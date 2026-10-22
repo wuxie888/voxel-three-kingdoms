@@ -2,7 +2,9 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="./icon.png">
 <link rel="apple-touch-icon" href="./icon.png">
 <title>體素三國 — Voxel Three Kingdoms</title>
@@ -30,6 +32,8 @@
 
   /* ---- HUD (owned by the hud part). DW8 layout, concept calligraphy. 1rem = 1/72 viewport height (10 px @720p). ---- */
   html { font-size: calc(100vh / 72); }
+  @supports (height: 100dvh) { html { font-size: calc(100dvh / 72); } canvas#c { height: 100dvh; } }   /* phones: the visible height */
+  body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   /* Portable brush fallback for machines without the macOS Xingkai/Kaiti assets: Yuji Boku (SIL OFL 1.1, Kinuta Font
      Factory), subset to the HUD's glyphs (src/ui/brush.woff2). Only fetched when the fonts before it are missing.
      When you add HUD text with new CJK characters, re-subset (Google Fonts css2?family=Yuji+Boku&text=...). */
@@ -236,11 +240,12 @@
     text-shadow: none; box-shadow: inset 0 0 0 .2rem #b3261e, inset 0 0 0 .35rem rgba(248,230,210,.75); }
   #menu .en { font: 500 1.8rem/1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: 1.1em; margin: .6rem 0 0 .6rem; opacity: .85; }
   #menu .sub { font-size: 2rem; letter-spacing: .5rem; margin: 1.6rem 0 0 .4rem; color: #e8d9bf; }
-  #menu table { align-self: flex-start; margin: 2rem 0 0 .2rem; border-collapse: collapse; font: 500 1.7rem/1 "Avenir Next", "Helvetica Neue", sans-serif;
-    border-left: .3rem solid #b3261e; background: linear-gradient(90deg, rgba(0,0,0,.35), rgba(0,0,0,0)); }
-  #menu td { padding: .45rem 1.6rem; white-space: nowrap; }
-  #menu td:first-child { font: 700 2.2rem/1 "Kaiti SC", "STKaiti", "KaiTi", "HudBrush", serif; color: #f2c14e; }
-  #menu td:first-child small { font: 500 1.3rem/1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: .15em; color: #cdbb9c; margin-left: .8rem; }
+  /* controls: two columns of key hints */
+  #menu .keys { align-self: flex-start; display: grid; grid-template-columns: auto auto; gap: .5rem 3.2rem; margin: 1.8rem 0 0 .2rem;
+    padding: .9rem 1.6rem; border-left: .3rem solid #b3261e; background: rgba(0,0,0,.28); font: 500 1.55rem/1 "Avenir Next", "Helvetica Neue", sans-serif; }
+  #menu .keys > div { display: flex; align-items: center; gap: 1.2rem; white-space: nowrap; }
+  #menu .keys > div > span:first-child { min-width: 11.5rem; font: 700 2.1rem/1 "Kaiti SC", "STKaiti", "KaiTi", "HudBrush", serif; color: #f2c14e; }
+  #menu .keys > div > span:first-child small { font: 500 1.2rem/1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: .15em; color: #cdbb9c; margin-left: .7rem; }
   #menu kbd { font: 600 1.5rem/1 "Avenir Next", "Helvetica Neue", sans-serif; padding: .3rem .6rem; margin-right: .3rem;
     border: .12rem solid rgba(239,227,207,.6); border-radius: .4rem; background: rgba(0,0,0,.45); }
   #menu button { align-self: flex-start; margin: 2.4rem 0 0 .2rem; padding: 1.2rem 4rem; cursor: pointer; border: 0; border-radius: .4rem;
@@ -267,7 +272,8 @@
   #menu .stages .rk[data-r="S"] { color: #ffd658; text-shadow: .15rem .2rem 0 rgba(0,0,0,.7), 0 0 1rem rgba(255,200,60,.9); }
   #menu .stages .rk[data-r="A"] { color: #ff7a52; }
   #menu .stages .rk[data-r="B"] { color: #8fc4ff; }
-  #menu .diff { display: flex; align-items: center; gap: .8rem; margin: 1.2rem 0 0 .2rem; }
+  #menu .opts { display: flex; flex-wrap: wrap; gap: 0 3.5rem; margin: 1.2rem 0 0 .2rem; }
+  #menu .diff { display: flex; align-items: center; gap: .8rem; }
   #menu .diff > span { font: 700 2.2rem/1 "Kaiti SC", "STKaiti", "KaiTi", "HudBrush", serif; color: #f2c14e; margin-right: .8rem; }
   #menu .diff > span small { font: 500 1.2rem/1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: .15em; color: #cdbb9c; margin-left: .6rem; }
   #menu .diff button { margin: 0; padding: .55rem 1.4rem; font-size: 2rem; letter-spacing: .2rem; background: rgba(0,0,0,.45); color: #f4ead8;
@@ -276,6 +282,67 @@
   #menu .diff button.on { background: linear-gradient(rgba(179,38,30,.85), rgba(110,20,14,.85)); box-shadow: 0 0 0 .18rem #f2c14e; }
   #menu button small { font: 600 1.4rem/1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: .3em; margin-left: 1rem; }
   #menu .hint { margin: 1.4rem 0 0 .4rem; font: 500 1.35rem/1.5 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: .08em; opacity: .7; }
+  /* boot screen: until the first frame is drawn and the shaders are warm (main.js removes it) */
+  #boot { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3vh;
+    background: radial-gradient(ellipse at 50% 60%, #3a2214, #1a120d 70%); color: #f4ead8; transition: opacity .5s; }
+  #boot.done { opacity: 0; pointer-events: none; }
+  #boot b { font: 700 13vh/1 "Xingkai SC", "STXingkai", "HudBrush", serif; letter-spacing: 2vh; text-shadow: .5vh .7vh 0 rgba(0,0,0,.5); }
+  #boot i { position: relative; width: 36vh; height: .6vh; background: rgba(242,193,78,.18); overflow: hidden; border-radius: .3vh; }
+  #boot em { position: absolute; top: 0; bottom: 0; width: 35%; background: linear-gradient(90deg, transparent, #f2c14e, transparent); animation: bootRun 1.1s ease-in-out infinite; }
+  @keyframes bootRun { from { left: -35%; } to { left: 100%; } }
+  #boot small { font: 600 1.8vh/1.4 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: .4em; opacity: .7; max-width: 80vw; text-align: center; }
+  /* ---- touch controls (ui/touch.js), shown with body.touch: floating stick (left half), buttons (right), pause */
+  #touch { display: none; }
+  body.touch #touch { display: block; position: fixed; inset: 0; z-index: 3; pointer-events: none; touch-action: none; }
+  body.touch.paused #touch, body.touch.result #touch { display: none; }
+  #touch .tb, #touch .tp { pointer-events: auto; -webkit-tap-highlight-color: transparent; touch-action: none; }
+  #touch .stick { position: fixed; left: 0; top: 0; width: 0; height: 0; opacity: 0; transition: opacity .12s; }
+  #touch .stick.on { opacity: 1; }
+  #touch .stick::before { content: ""; position: absolute; left: -11vh; top: -11vh; width: 22vh; height: 22vh; border-radius: 50%;
+    background: rgba(10,6,4,.35); box-shadow: inset 0 0 0 .3vh rgba(242,193,78,.5); }
+  #touch .stick i { position: absolute; left: -5vh; top: -5vh; width: 10vh; height: 10vh; border-radius: 50%;
+    background: radial-gradient(#ffe7a3, #c98a22); box-shadow: 0 .5vh 1.5vh rgba(0,0,0,.5); }
+  #touch .tb { position: fixed; border: 0; border-radius: 50%; padding: 0; color: #f4ead8; background: rgba(12,8,6,.5);
+    box-shadow: inset 0 0 0 .35vh rgba(242,193,78,.55), 0 .6vh 1.6vh rgba(0,0,0,.4); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; }
+  #touch .tb b { font: 700 6vh/1 "Xingkai SC", "STXingkai", "HudBrush", serif; }
+  #touch .tb small { font: 700 1.4vh/1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: .1em; opacity: .7; margin-top: .5vh; }
+  #touch .tb.down { background: rgba(242,193,78,.45); transform: scale(.94); }
+  #touch .tb-attack { right: 5vh; bottom: 7vh; width: 23vh; height: 23vh; }
+  #touch .tb-attack b { font-size: 10vh; }
+  #touch .tb-charge { right: 30vh; bottom: 5vh; width: 15vh; height: 15vh; }
+  #touch .tb-jump { right: 27vh; bottom: 23vh; width: 14vh; height: 14vh; }
+  #touch .tb-dodge { right: 9vh; bottom: 33vh; width: 14vh; height: 14vh; }
+  #touch .tb-musou { right: 26vh; bottom: 40vh; width: 13vh; height: 13vh; opacity: .55; }
+  #touch .tb-musou b { font-size: 4.2vh; }
+  #touch .tb-musou.ready { opacity: 1; background: radial-gradient(rgba(255,214,90,.8), rgba(200,120,20,.65)); animation: muPulse 1s ease-in-out infinite; }
+  @keyframes muPulse { 50% { box-shadow: inset 0 0 0 .35vh #fff1c0, 0 0 4vh rgba(255,200,60,.9); } }
+  #touch .tp { position: fixed; left: 1.6vh; top: 1.6vh; width: 9vh; height: 9vh; border: 0; border-radius: 50%; padding: 0;
+    background: rgba(12,8,6,.5); color: #f4ead8; font: 700 2.6vh/1 sans-serif; box-shadow: inset 0 0 0 .3vh rgba(242,193,78,.5); }
+  /* touch layout of the HUD: clear of the pause button and the action buttons */
+  body.touch #hud .h-intro, body.touch #hud .h-target, body.touch #hud .h-dlg { left: 12vh; }
+  body.touch #hud .h-intro .keys { display: none; }
+  body.touch #hud .hp { right: 36%; }
+  body.touch #hud .h-ko { right: auto; left: 50%; bottom: auto; top: 1.8rem; transform: translateX(-50%) scale(.75); transform-origin: 50% 0; text-align: center; }
+  body.touch #hud .h-ko b, body.touch #hud .h-ko u { transform-origin: 50% 85%; }
+  body.touch .boss-bar { top: 12vh !important; }
+  /* touch layout of the menu: the keyboard table gives way to a touch guide, cards grow */
+  #menu .tguide { display: none; }
+  body.touch #menu .keys, body.touch #menu .hint { display: none; }
+  body.touch #menu .tguide { display: block; margin: 2rem 0 0 .4rem; font: 600 2rem/1.6 "Kaiti SC", "STKaiti", "KaiTi", "HudBrush", serif; color: #efe3cf; }
+  body.touch #menu .tguide b { color: #f2c14e; }
+  body.touch #menu .heroes button { padding: 1rem 1.6rem .9rem; }
+  body.touch #menu .diff button { padding: .9rem 1.8rem; }
+  /* phones held upright: ask for landscape */
+  #rotate { display: none; }
+  @media (orientation: portrait) and (pointer: coarse) {
+    #rotate { display: flex; position: fixed; inset: 0; z-index: 50; flex-direction: column; align-items: center; justify-content: center; gap: 3vh;
+      background: #1a120d; color: #f4ead8; text-align: center; }
+    #rotate i { width: 12vw; height: 22vw; border: 1.2vw solid #f2c14e; border-radius: 2vw; animation: rot 2s ease-in-out infinite; }
+    #rotate b { font: 700 7vw/1.2 "Xingkai SC", "STXingkai", "HudBrush", serif; letter-spacing: 1vw; }
+    #rotate small { font: 600 3vw/1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: .3em; opacity: .75; }
+    @keyframes rot { 0%, 25% { transform: rotate(0); } 50%, 85% { transform: rotate(-90deg); } 100% { transform: rotate(0); } }
+  }
   /* result card (main.js): 戰死 / 勝利 */
   #result { position: fixed; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; user-select: none;
     background: radial-gradient(ellipse at center, rgba(40,4,2,.55), rgba(6,2,2,.88)); color: #f4ead8; animation: resIn .6s ease-out; }
@@ -310,7 +377,10 @@
 </style>
 </head>
 <body>
+<div id="boot"><b>體素三國</b><i><em></em></i><small>載入中 · LOADING</small></div>
+<script>addEventListener('error', (e) => { const s = document.querySelector('#boot small'); if (s) s.textContent = '啟動失敗 · ' + (e.message || 'error') + ' — WebGL2 required'; });</script>
 <canvas id="c"></canvas>
+<div id="rotate"><i></i><b>請將手機橫置</b><small>ROTATE TO LANDSCAPE</small></div>
 <div id="hud"></div>
 <div id="menu">
   <div class="links">
@@ -321,17 +391,18 @@
   <div class="en">VOXEL THREE KINGDOMS</div>
   <div class="heroes" id="heroes"></div>
   <div class="heroes stages" id="stages"></div>
-  <div class="diff" id="diff"><span>難度<small>DIFFICULTY</small></span></div>
+  <div class="opts"><div class="diff" id="diff"><span>難度<small>DIFFICULTY</small></span></div><div class="diff" id="gfx"><span>畫質<small>GRAPHICS</small></span></div></div>
   <div class="sub" id="tagline"></div>
-  <table>
-    <tr><td>移動<small>MOVE</small></td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows</td></tr>
-    <tr><td>攻擊<small>ATTACK</small></td><td><kbd>J</kbd> / left click — tap for a 6-hit combo</td></tr>
-    <tr><td>蓄力<small>CHARGE</small></td><td><kbd>K</kbd> / right click — mid-combo for charge attacks</td></tr>
-    <tr><td>跳躍<small>JUMP</small></td><td><kbd>Space</kbd></td></tr>
-    <tr><td>閃避<small>DODGE</small></td><td><kbd>L</kbd> / <kbd>Shift</kbd></td></tr>
-    <tr><td>無雙<small>MUSOU</small></td><td><kbd>I</kbd> — when the gold gauge is full</td></tr>
-    <tr><td>視角<small>CAMERA</small></td><td><kbd>Q</kbd><kbd>E</kbd> / drag the mouse</td></tr>
-  </table>
+  <div class="keys">
+    <div><span>移動<small>MOVE</small></span><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows</span></div>
+    <div><span>攻擊<small>ATTACK</small></span><span><kbd>J</kbd> / left click · combo</span></div>
+    <div><span>蓄力<small>CHARGE</small></span><span><kbd>K</kbd> / right click · mid-combo</span></div>
+    <div><span>跳躍<small>JUMP</small></span><span><kbd>Space</kbd></span></div>
+    <div><span>閃避<small>DODGE</small></span><span><kbd>L</kbd> / <kbd>Shift</kbd></span></div>
+    <div><span>無雙<small>MUSOU</small></span><span><kbd>I</kbd> · gold gauge full</span></div>
+    <div><span>視角<small>CAMERA</small></span><span><kbd>Q</kbd><kbd>E</kbd> / drag</span></div>
+  </div>
+  <div class="tguide"><b>左半屏</b> 移動 · <b>攻</b> 攻擊 · <b>蓄</b> 蓄力 · <b>跳</b> 跳躍 · <b>閃</b> 閃避 · <b>無雙</b> 槽滿時發動 · <b>右半屏滑動</b> 視角</div>
   <button id="go">出陣<small>START</small></button>
   <div class="hint">← → 選將 hero · ↑ ↓ 選戰場 battle · Enter to start · Esc to pause · gamepad supported · best with keyboard, mouse and sound on</div>
 </div>

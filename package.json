@@ -1,0 +1,15 @@
+{
+  "name": "voxel-three-kingdoms",
+  "private": true,
+  "type": "module",
+  "description": "體素三國 · Voxel Three Kingdoms — browser voxel hack-and-slash (plain ES modules; the build only bundles for the deploy)",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "build": "node tools/build.mjs",
+    "deploy": "node tools/build.mjs --deploy"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  },
+  "license": "MIT"
+}

@@ -65,10 +65,15 @@ export function createWorld(scene) {
   let t = 0;
   return {
     sun, hemi, fires: dressing.fires, banners: dressing.cloths, sunDir: SUN_DIR, lightDir: LIGHT_DIR,
+    /** Shadow map resolution (graphics quality). */
+    setShadow(n) {
+      if (sun.shadow.mapSize.x === n) return;
+      sun.shadow.mapSize.set(n, n); sun.shadow.map?.dispose(); sun.shadow.map = null;
+    },
     update(dt, focus) {
       t += dt;
       // shadow frustum follows the focus (snapped to texels to avoid shimmer)
-      const step = 56 / 2048;
+      const step = 56 / sun.shadow.mapSize.x;
       tmp.set(Math.round(focus.x / step) * step, 0, Math.round(focus.z / step) * step);
       sun.target.position.copy(tmp);
       sun.position.copy(LIGHT_DIR).multiplyScalar(70).add(tmp);

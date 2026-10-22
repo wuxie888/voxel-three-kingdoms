@@ -1,4 +1,4 @@
-// Input → actions from keyboard, mouse and gamepad.
+// Input → actions from keyboard, mouse, gamepad and touch (ui/touch.js drives the `touch` hooks).
 // The sim calls sample() exactly once per fixed step; "pressed" edges are latched so a tap
 // between two steps is never lost.
 export const ACTIONS = ['attack', 'charge', 'jump', 'dodge', 'musou'];
@@ -15,7 +15,7 @@ const MOVEKEYS = {
 const PADMAP = { 0: 'jump', 2: 'attack', 3: 'charge', 1: 'musou', 5: 'dodge', 7: 'dodge' };
 
 export function createInput() {
-  const dev = { held: {}, latch: {}, keys: new Set(), orbitPx: 0, pad: {} };
+  const dev = { held: {}, latch: {}, keys: new Set(), orbitPx: 0, pad: {}, tx: 0, ty: 0 };
   const out = { mx: 0, my: 0, orbit: 0, pressed: {}, held: {} };
 
   addEventListener('keydown', (e) => {
@@ -33,18 +33,19 @@ export function createInput() {
   let drag = false, lastX = 0;
   addEventListener('contextmenu', (e) => e.preventDefault());
   addEventListener('pointerdown', (e) => {
-    if (e.target.closest && e.target.closest('button,a,input')) return;
+    if (e.pointerType === 'touch' || (e.target.closest && e.target.closest('button,a,input'))) return;   // touch: ui/touch.js
     const a = e.button === 0 ? 'attack' : e.button === 2 ? 'charge' : null;
     if (a) { dev.held[a] = true; dev.latch[a] = true; }
     drag = true; lastX = e.clientX;
   });
   addEventListener('pointerup', (e) => {
+    if (e.pointerType === 'touch') return;
     const a = e.button === 0 ? 'attack' : e.button === 2 ? 'charge' : null;
     if (a) dev.held[a] = false;
     drag = false;
   });
   addEventListener('pointermove', (e) => {
-    if (drag) { dev.orbitPx += e.clientX - lastX; lastX = e.clientX; }
+    if (drag && e.pointerType !== 'touch') { dev.orbitPx += e.clientX - lastX; lastX = e.clientX; }
   });
 
   function pollPad() {
@@ -63,6 +64,7 @@ export function createInput() {
     let mx = 0, my = 0, orbit = 0;
     const pad = pollPad();
     for (const k of dev.keys) { const m = MOVEKEYS[k]; if (m) { mx += m[0]; my += m[1]; } }
+    mx += dev.tx; my += dev.ty;                                 // touch stick
     if (pad) {
       const dz = (v) => (Math.abs(v) < 0.18 ? 0 : v);
       mx += dz(pad.axes[0] || 0); my -= dz(pad.axes[1] || 0);
@@ -82,5 +84,11 @@ export function createInput() {
     return out;
   }
 
-  return { sample };
+  /** Touch hooks (ui/touch.js): stick in [-1, 1]² (up = +y), a button down / up, a camera swipe in px. */
+  const touch = {
+    stick(x, y) { dev.tx = x; dev.ty = y; },
+    button(a, down) { if (down && !dev.held[a]) dev.latch[a] = true; dev.held[a] = down; },
+    orbit(px) { dev.orbitPx += px; },
+  };
+  return { sample, touch };
 }

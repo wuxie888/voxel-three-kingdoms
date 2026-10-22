@@ -27,10 +27,14 @@ import { createPickups } from './ui/pickups.js';
 import { on } from './core/events.js';
 import { createCampaign } from './stages/campaign.js';
 import { createProps } from './stages/props.js';
-import { DIFFS, settings, saveSettings, bestOf, keepBest, rankOf } from './core/settings.js';
+import { createTouch } from './ui/touch.js';
+import { DIFFS, QUALITY, settings, saveSettings, bestOf, keepBest, rankOf } from './core/settings.js';
 
 const params = new URLSearchParams(location.search);
-const ENEMIES = Math.max(0, Math.min(2000, params.get('enemies') ? Number(params.get('enemies')) | 0 : 300));
+// graphics quality: chosen in the menu, or auto (last level the governor settled on; phones start at medium)
+const autoStart = () => settings.autoQ || (matchMedia('(pointer: coarse)').matches ? 'medium' : 'high');
+let qLevel = QUALITY[params.get('q')] ? params.get('q') : settings.quality === 'auto' ? autoStart() : settings.quality;
+const ENEMIES = Math.max(0, Math.min(2000, params.get('enemies') ? Number(params.get('enemies')) | 0 : QUALITY[qLevel].enemies));
 
 const canvas = document.getElementById('c');
 let vw = innerWidth, vh = innerHeight;
@@ -38,6 +42,8 @@ let vw = innerWidth, vh = innerHeight;
 const post = createPost({ canvas, width: vw, height: vh });
 const scene = new THREE.Scene();
 const world = createWorld(scene);
+const applyQuality = (id) => { qLevel = id; const q = QUALITY[id]; post.setQuality(q); world.setShadow(q.shadow); };
+applyQuality(qLevel);
 
 // ---- sim
 const game = { frame: 0, hitstop: 0, freeze: 0, diff: DIFFS[settings.diff] };
@@ -51,6 +57,7 @@ const bossCfg = STAGE.boss && (STAGE.boss.id === HERO.id ? STAGE.boss.alt : STAG
 game.boss = bossCfg ? createBoss(game, HEROES.find((h) => h.id === bossCfg.id)) : null;
 game.campaign = createCampaign(game);   // the battle's goals (STAGE.script): officers, spots to take, the boss → 勝利
 const input = createInput();
+const touch = createTouch(input, game, { onPause: () => setPaused(true) });   // phones / tablets: stick + buttons
 const pickups = createPickups(game, scene);   // meat buns: heal on pickup (ui/pickups.js)
 if (params.has('debug') || params.has('rec')) Object.assign(window, { game, scene });   // debug: inspect sim state from the console
 
@@ -114,6 +121,7 @@ function render() {
   post.flash(vfx.flash);
   post.render(scene, camRig.camera, game.frame / 60, camRig.focus, world.sunDir);   // post-fx: DoF focus + haze sun
   hud.update();
+  touch.update();
 }
 
 // ---- result card: 戰死 when the hero falls (restart / back to hero select), 勝利 when the battle's last goal falls
@@ -144,7 +152,7 @@ const result = (() => {
       best.innerHTML = isNew ? '<em>新紀錄</em> NEW RECORD' : `最佳紀錄 BEST · <b>${b.rank}</b> · ${clock(b.time)} · ${DIFFS[b.diff]?.zh || ''}`;
       paintBest();
     }
-    el.hidden = false; open = true; hudEl.hidden = true;
+    el.hidden = false; open = true; hudEl.hidden = true; document.body.classList.add('result');
   }, delay);
   on('hero:death', () => show(false, 1800));
   on('boss:defeat', () => { if (!STAGE.script) show(true, 3200); });
@@ -158,7 +166,7 @@ const result = (() => {
   el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { e.stopPropagation(); act(b.dataset.a); } });
   const r = {
     get open() { return open; }, act,
-    hide() { el.hidden = true; open = false; if (!paused) hudEl.hidden = false; t0 = game.frame; },
+    hide() { el.hidden = true; open = false; if (!paused) hudEl.hidden = false; t0 = game.frame; document.body.classList.remove('result'); },
   };
   return r;
 })();
@@ -208,6 +216,28 @@ function paintBest() {
   });
 }
 paintBest();
+// graphics: applies at once (soldier count on the next load); 自動 shows the level it is running at
+const gfxRow = document.getElementById('gfx');
+const gfxBtns = ['auto', ...Object.keys(QUALITY)].map((id) => {
+  const b = document.createElement('button');
+  b.dataset.q = id;
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    saveSettings({ quality: id });
+    applyQuality(id === 'auto' ? autoStart() : id);
+    paintGfx();
+  });
+  gfxRow.appendChild(b);
+  return b;
+});
+function paintGfx() {
+  for (const b of gfxBtns) {
+    const id = b.dataset.q;
+    b.innerHTML = id === 'auto' ? `自動<small>AUTO · ${QUALITY[qLevel].zh}</small>` : `${QUALITY[id].zh}<small>${QUALITY[id].en}</small>`;
+    b.classList.toggle('on', id === settings.quality);
+  }
+}
+paintGfx();
 // difficulty: applies at once (the battle restarts)
 const diffRow = document.getElementById('diff');
 for (const d of Object.values(DIFFS)) {
@@ -223,8 +253,13 @@ for (const d of Object.values(DIFFS)) {
   diffRow.appendChild(b);
 }
 let paused;
-const setPaused = (v) => { paused = v; menu.hidden = !v; hudEl.hidden = v; input.sample(); };   // sample(): drop keys pressed on the menu
-go.addEventListener('click', () => setPaused(false));
+const setPaused = (v) => { paused = v; menu.hidden = !v; hudEl.hidden = v; document.body.classList.toggle('paused', v); input.sample(); };   // sample(): drop keys pressed on the menu
+go.addEventListener('click', () => {
+  setPaused(false);
+  if (document.body.classList.contains('touch')) {          // phones: fill the screen, hold landscape where allowed
+    document.documentElement.requestFullscreen?.().then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
+  }
+});
 addEventListener('keydown', (e) => {
   if (result.open) { if (e.code === 'Enter' || e.code === 'NumpadEnter') result.act('retry'); else if (e.code === 'Escape') result.act('menu'); return; }
   if (e.code === 'Escape') setPaused(!paused);
@@ -239,13 +274,31 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('blur', () => setPaused(true));
 
+// ---- auto quality: while playing, frames slower than 25 ms on average (under 40 fps) over two 3 s windows in a row
+// step the graphics down one level; the level reached is remembered for the next visit
+let gT = 0, gN = 0, gSlow = 0;
+function govern(dt) {
+  if (settings.quality !== 'auto' || paused || document.hidden || params.has('rec') || params.get('q')) { gT = gN = 0; return; }
+  gT += dt; gN++;
+  if (gT < 3) return;
+  const avg = gT / gN; gT = gN = 0;
+  gSlow = avg > 0.025 ? gSlow + 1 : 0;
+  if (gSlow >= 2 && qLevel !== 'low') {
+    gSlow = 0;
+    const next = qLevel === 'high' ? 'medium' : 'low';
+    applyQuality(next); saveSettings({ autoQ: next }); paintGfx();
+  }
+}
+
 // ---- loop
 let acc = 0, last = performance.now();
 const frame = (now) => {
   requestAnimationFrame(frame);
   // clamp at 0 too: the first rAF timestamp can precede the performance.now() taken at module init
-  acc += Math.min(0.1, Math.max(0, (now - last) / 1000));
+  const raw = Math.max(0, (now - last) / 1000);
+  acc += Math.min(0.1, raw);
   last = now;
+  govern(Math.min(0.25, raw));
   if (paused) { acc = 0; input.sample(); return; }
   let n = 0;
   while (acc >= 1 / 60 && n < 4) { step(); acc -= 1 / 60; n++; }
@@ -258,4 +311,6 @@ setPaused(!PREVIEW);
 if (PREVIEW) document.getElementById('hud').hidden = true;
 render();
 post.warm(scene, camRig.camera);
+const boot = document.getElementById('boot');                     // the boot screen (index.html) fades out
+if (boot) { boot.classList.add('done'); setTimeout(() => boot.remove(), 600); }
 requestAnimationFrame(frame);

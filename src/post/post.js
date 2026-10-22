@@ -8,6 +8,8 @@
 //                     chromatic fringe, split-tone grade (scene-linear), hue-preserving S-curve + per-channel soft
 //                     shoulder (fire stays orange/yellow, white armour keeps its shading), bottom darkening,
 //                     vignette, grain, 2 px ordered dither + palette quantisation (retro).
+// Quality (setQuality): render scale (the canvas upscales pixelated), MSAA samples, and `dof` — off, the dof pass is
+// skipped, bloom reads the sharp image and the final pass takes one scene tap (no fringe / streaks: LITE).
 // post=0 renders straight to the canvas. Render-only: reads camera/focus, never touches sim state.
 import * as THREE from 'three';
 import { STAGE } from '../stages/index.js';
@@ -151,9 +153,13 @@ const FinalShader = /* glsl */`
     vec3 nb = texture2D(tSharp, uv + vec2(t.x, 0.0)).rgb + texture2D(tSharp, uv - vec2(t.x, 0.0)).rgb
             + texture2D(tSharp, uv + vec2(0.0, t.y)).rgb + texture2D(tSharp, uv - vec2(0.0, t.y)).rgb;
     vec3 sharp = max(s.rgb + (s.rgb - nb * 0.25) * uSharpen, 0.0);
+  #ifdef LITE
+    return sharp + texture2D(tBloom, uv).rgb;                 // low quality: no depth of field
+  #else
     vec4 b = texture2D(tDof, uv);
     float k = max(smoothstep(0.3, 1.3, coc(s.a)), b.a);
     return mix(sharp, b.rgb, k) + texture2D(tBloom, uv).rgb;
+  #endif
   }
   // ink outline: relative jump in view distance (tSharp alpha) to any 4-neighbour at pixel scale
   float edgeAt(vec2 uv) {
@@ -170,6 +176,9 @@ const FinalShader = /* glsl */`
     vec2 uv = uPixel > 1.0 ? (floor(vUv * uRes / uPixel) + 0.5) * uPixel / uRes : vUv;
     vec2 d = uv - 0.5;
     // light lateral chromatic fringe toward the edges
+  #ifdef LITE
+    vec3 c = scene(uv);                                       // low quality: one scene tap, no fringe, no streaks
+  #else
     vec2 ca = vec2(uCa * dot(d, d) * 4.0 / uRes.x, 0.0);
     vec3 c = vec3(scene(uv + ca).r, scene(uv).g, scene(uv - ca).b);
     // faint horizontal streaks: highlights smear sideways (tape / anamorphic feel), plus low row-to-row jitter
@@ -179,6 +188,7 @@ const FinalShader = /* glsl */`
       st += (max(texture2D(tDof, uv + vec2(o, 0.0)).rgb - 1.0, 0.0) + max(texture2D(tDof, uv - vec2(o, 0.0)).rgb - 1.0, 0.0)) * w;
     }
     c += st * uStreak * vec3(1.0, 0.86, 0.7);
+  #endif
     c *= 1.0 + (hash(vec2(floor(gl_FragCoord.y * 0.5), floor(uTime * 12.0))) - 0.5) * uRowNoise;
     // golden-hour grade in scene-linear (before the curve, so its shoulder also rolls off the tinted highlights):
     // split tone — cool mauve-blue shade, peach-gold light; blue-dominant pixels (spear arc, tassel, teal trim) keep
@@ -269,21 +279,36 @@ export function createPost({ canvas, enabled = true, width, height }) {
     }));
   }
 
-  function setSize(w, h) {
-    renderer.setSize(w, h, false);
+  const Q = { scale: 1, msaa: 4, dof: true };
+  let cssW = width, cssH = height;
+  function setSize(cw, ch) {
+    cssW = cw; cssH = ch;
+    renderer.setPixelRatio(enabled ? Q.scale : Math.min(devicePixelRatio, 2));
+    renderer.setSize(cw, ch, false);
     if (!enabled) return;
-    const hw = Math.round(w / 2), hh = Math.round(h / 2);
+    const w = Math.round(cw * Q.scale), h = Math.round(ch * Q.scale), hw = Math.round(w / 2), hh = Math.round(h / 2);
     sceneRT.setSize(w, h); atmosRT.setSize(w, h); dofRT.setSize(hw, hh);
     bloom.setSize(hw, hh);
     fin.material.uniforms.uRes.value.set(w, h);
     dof.material.uniforms.uTexel.value.set(1 / hw, 1 / hh);
   }
   setSize(width, height);
+  /** Quality: {scale, msaa, dof} (any subset); applies at once. */
+  function setQuality(q) {
+    const msaa = q.msaa ?? Q.msaa, dofOn = q.dof ?? Q.dof;
+    if (enabled && msaa !== Q.msaa) { sceneRT.samples = msaa; sceneRT.dispose(); }   // re-created with the new samples on next use
+    if (enabled && dofOn !== Q.dof) {
+      if (dofOn) delete fin.material.defines.LITE; else fin.material.defines.LITE = '';
+      fin.material.needsUpdate = true;
+    }
+    Object.assign(Q, q);
+    setSize(cssW, cssH);
+  }
 
   let flash = 0;
   return {
     renderer, bloom, enabled,
-    setSize,
+    setSize, setQuality, quality: Q,
     flash(v) { flash = v; },
     /** Boot, behind the title menu: one offscreen frame with every hidden object shown and nothing culled, so each
      *  program (pools, the boss, telegraphs, projectiles) compiles and each buffer/texture uploads now instead of
@@ -317,17 +342,19 @@ export function createPost({ canvas, enabled = true, width, height }) {
       if (sunDir) a.uSunDir.value.copy(sunDir);
       renderer.setRenderTarget(atmosRT); atmos.render(renderer);
 
-      const f = focus ? camera.position.distanceTo(focus) : 7;
-      const u = dof.material.uniforms;
-      syncP(u);
-      u.uFarScale.value = THREE.MathUtils.clamp(7 / f, 1, 3);   // close-ups: stronger background bokeh
-      u.uNearScale.value = THREE.MathUtils.clamp(8 / f, 0.25, 1);   // wide/high shots: no tilt-shift miniature at the bottom
-      u.uFocus.value = f; u.uBandN.value = Math.max(P.bandNear, f * 0.22); u.uBandF.value = Math.max(P.bandFar, f * 0.6);
-      renderer.setRenderTarget(dofRT); dof.render(renderer);
+      if (Q.dof) {
+        const f = focus ? camera.position.distanceTo(focus) : 7;
+        const u = dof.material.uniforms;
+        syncP(u);
+        u.uFarScale.value = THREE.MathUtils.clamp(7 / f, 1, 3);   // close-ups: stronger background bokeh
+        u.uNearScale.value = THREE.MathUtils.clamp(8 / f, 0.25, 1);   // wide/high shots: no tilt-shift miniature at the bottom
+        u.uFocus.value = f; u.uBandN.value = Math.max(P.bandNear, f * 0.22); u.uBandF.value = Math.max(P.bandFar, f * 0.6);
+        renderer.setRenderTarget(dofRT); dof.render(renderer);
+      }
 
       bloom.strength = P.bloom; bloom.radius = P.bloomRadius; bloom.threshold = P.bloomThreshold;
       bloom.highPassUniforms.smoothWidth.value = P.bloomKnee; bloom.highPassUniforms.uCool.value = P.bloomCool;
-      bloom.render(renderer, null, dofRT, 1 / 60, false);
+      bloom.render(renderer, null, Q.dof ? dofRT : atmosRT, 1 / 60, false);
 
       const g = fin.material.uniforms;
       syncP(g);

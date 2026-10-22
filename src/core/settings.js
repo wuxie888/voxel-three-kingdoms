@@ -12,8 +12,17 @@ export const DIFFS = {
   hard: { id: 'hard', zh: '難', en: 'HARD', dmg: 1.6, hp: 1.35, gap: 0.72 },
 };
 
-export const settings = { diff: 'normal', ...read(SKEY) };
+/** Graphics: render scale, MSAA, depth of field, shadow map, soldiers on the field (enemies apply on the next load). */
+export const QUALITY = {
+  high: { id: 'high', zh: '高', en: 'HIGH', scale: 1, msaa: 4, dof: true, shadow: 2048, enemies: 300 },
+  medium: { id: 'medium', zh: '中', en: 'MEDIUM', scale: 1, msaa: 0, dof: true, shadow: 1024, enemies: 300 },
+  low: { id: 'low', zh: '低', en: 'LOW', scale: 0.7, msaa: 0, dof: false, shadow: 1024, enemies: 180 },
+};
+
+// quality: 'auto' or a QUALITY id; autoQ: the level the auto governor (main.js) settled on last time
+export const settings = { diff: 'normal', quality: 'auto', autoQ: null, ...read(SKEY) };
 if (!DIFFS[settings.diff]) settings.diff = 'normal';
+if (settings.quality !== 'auto' && !QUALITY[settings.quality]) settings.quality = 'auto';
 export function saveSettings(patch) { Object.assign(settings, patch); write(SKEY, settings); }
 
 // ---- best result per battle × hero: { rank, time, kos, combo, diff }
