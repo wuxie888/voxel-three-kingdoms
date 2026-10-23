@@ -13,6 +13,7 @@ import { MOVES, moveClip } from './moves.js';
 import { bufferInput, stepCombo } from './combo.js';
 import { stepLocomotion, stepPhysics, setState, LOCO } from './locomotion.js';
 import { ARENA_RADIUS, WALL_Z } from '../world/world.js';
+import { START } from '../world/field.js';
 import { pushOut } from '../world/setpieces.js';
 import { emit } from '../core/events.js';
 import { HERO } from '../heroes/index.js';
@@ -37,7 +38,7 @@ export function createHero(game) {
     x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0,
     hp: HP0, hpMax: HP0, musou: 0, musouMax: 100, gear: null, spdK: 1, officerKOs: 0,
     state: 'idle', stateT: 0, move: null, moveT: 0, moveSeq: 0,
-    grounded: true, airAttack: false, iframes: 0, speed: 0, runT: 0, runPhase: 0,
+    grounded: true, airAttack: false, iframes: 0, speed: 0, runT: 0, sprint: 0, sprintT: 0, runPhase: 0,
     combo: 0, comboT: 0, kos: 0, atk: 1, taken: 0, buffAtk: 0, buffDef: 0, hurtF: -99,   // buffs: frames left (supplies/supplies.js)
     buf: null, bufT: 0, dodgeBuf: 0, jumpBuf: 0, musouBuf: 0, dodgeX: 0, dodgeZ: 1,
     musouClip: null, musouT: 0,
@@ -50,9 +51,9 @@ export function createHero(game) {
       om: null, ot: 0 },              // weapon overlay (fan heroes): move id and move frame, as shown
   };
 
-  h.reset = ({ x = 0, z = 0, yaw = 0 } = {}) => {
+  h.reset = ({ x = START[0], z = START[1], yaw = START[2] } = {}) => {
     Object.assign(h, { x, y: 0, z, vx: 0, vy: 0, vz: 0, yaw, hp: h.hpMax, musou: 0, state: 'idle', stateT: 0, move: null,
-      moveT: 0, moveSeq: 0, grounded: true, airAttack: false, iframes: 0, speed: 0, runT: 0, runPhase: 0, combo: 0, comboT: 0,
+      moveT: 0, moveSeq: 0, grounded: true, airAttack: false, iframes: 0, speed: 0, runT: 0, sprint: 0, sprintT: 0, runPhase: 0, combo: 0, comboT: 0,
       kos: 0, officerKOs: 0, atk: 1, taken: 0, buffAtk: 0, buffDef: 0, hurtF: -99, buf: null, bufT: 0, dodgeBuf: 0, jumpBuf: 0, musouBuf: 0, musouClip: null, musouT: 0,
       airN: 0, moveAir: false, dodgeSeq: 0 });
     Object.assign(h.anim, { id: 'idle', t: 0, k: 0, seq: -1, pid: null, pt: 0, pk: 0, blendF: 1, blendN: 1, yaw, lean: 0, fx: x, fz: z, px: x, pz: z, mf: null, mt: 0, om: null, ot: 0 });
@@ -103,6 +104,7 @@ export function createHero(game) {
     // musou part r3: one full gauge segment is enough (game.musou.ready; one Musou spends one of the 3 segments)
     else if (h.musouBuf && game.musou.ready() && h.grounded && h.state !== 'hurt') { h.musouBuf = 0; game.musou.start(inp); }
     else if (!stepCombo(h, inp, game)) stepLocomotion(h, inp, game.cam.yaw);
+    if (h.state !== 'run' && h.state !== 'jump' && h.state !== 'land') h.sprint = h.sprintT = 0;   // a swing, a blow, a roll end the 疾走
     if (stepPhysics(h) && h.state === 'jump') setState(h, 'land');
     // arena bounds (castle wall in +Z)
     const r = Math.hypot(h.x, h.z);
@@ -120,7 +122,7 @@ function animDesc(h) {
     // combo-system seam: moves.js `anim` retimes the clip (holds, snaps, clip cuts); a cut counts as a new anim seq → blend
     case 'attack': { const c = moveClip(MOVES[h.move], h.moveT); return [c[0], c[1], 0, h.moveSeq * 16 + c[2]]; }
     case 'musou': return [h.musouClip, h.musouT, 0, -2];
-    case 'run': return ['run', h.runPhase, Math.min(1, h.speed / LOCO.runSpeed), -1];
+    case 'run': return ['run', h.runPhase, Math.min(1.6, h.speed / LOCO.runSpeed), -1];   // > 1: sprint / 疾風 gear (no skating)
     case 'dodge': return ['dodge', h.stateT / LOCO.dodgeFrames, 0, -100 - h.dodgeSeq];   // new seq per dodge → re-blend on a double dodge
     // locomotion-dodge r2: after an air string (airN > 0) the fall uses the DW8 spread-arm descent
     case 'jump': return [h.airN ? 'airFall' : 'air', Math.min(1, Math.max(0, 0.5 - h.vy / (2 * LOCO.jumpV))), 0, -1];

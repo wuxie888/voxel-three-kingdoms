@@ -87,9 +87,10 @@ export function createStructures(scene, game, vfx) {
 
   // flood
   const flood = STAGE.script?.some((g) => g.flood);
-  const water = flood ? new THREE.Mesh(new THREE.PlaneGeometry(320, 130, 160, 65).rotateX(-Math.PI / 2), floodMaterial()) : null;
-  const wall = flood ? new THREE.Mesh(new THREE.BoxGeometry(320, 2.4, 2.2), new THREE.MeshStandardMaterial({ color: 0x6e7c84, emissive: 0x2a343a, emissiveIntensity: 0.4, transparent: true, opacity: 0.85, roughness: 0.3 })) : null;
-  if (water) { water.position.set(0, 0.14, -15); water.visible = false; water.renderOrder = 2; wall.visible = false; scene.add(water, wall); }
+  const FW = 2 * (FLOOD.z0 - FLOOD.z1) + 120, FD = FLOOD.z0 - FLOOD.z1 + 20;   // the sheet covers the whole field
+  const water = flood ? new THREE.Mesh(new THREE.PlaneGeometry(FW, FD, Math.round(FW / 2), Math.round(FD / 2)).rotateX(-Math.PI / 2), floodMaterial()) : null;
+  const wall = flood ? new THREE.Mesh(new THREE.BoxGeometry(FW, 2.4, 2.2), new THREE.MeshStandardMaterial({ color: 0x6e7c84, emissive: 0x2a343a, emissiveIntensity: 0.4, transparent: true, opacity: 0.85, roughness: 0.3 })) : null;
+  if (water) { water.position.set(0, 0.14, (FLOOD.z0 + FLOOD.z1) / 2); water.visible = false; water.renderOrder = 2; wall.visible = false; scene.add(water, wall); }
 
   on('target:hit', (e) => {
     const p = parts[e.j];

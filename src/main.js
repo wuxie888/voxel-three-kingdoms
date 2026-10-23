@@ -29,6 +29,8 @@ import { on } from './core/events.js';
 import { createCampaign } from './stages/campaign.js';
 import { createProps } from './stages/props.js';
 import { createStructures } from './stages/structures.js';
+import { createBases } from './stages/bases.js';
+import { createBasesView } from './stages/basesView.js';
 import { createWeather } from './world/weather.js';
 import { createTouch } from './ui/touch.js';
 import { createArmory, itemCard } from './ui/armory.js';
@@ -64,6 +66,7 @@ game.musou = createMusou(game);
 const bossCfg = STAGE.boss && (STAGE.boss.id === HERO.id ? STAGE.boss.alt : STAGE.boss);
 game.boss = bossCfg ? createBoss(game, HEROES.find((h) => h.id === bossCfg.id)) : null;
 game.campaign = createCampaign(game);   // the battle's goals (STAGE.script): officers, spots to take, the boss → 勝利
+game.bases = createBases(game);         // the camps of the field (STAGE.map.bases): garrisons, captains, reinforcements
 const input = createInput();
 const touch = createTouch(input, game, { onPause: () => setPaused(true) });   // phones / tablets: stick + buttons
 game.supplies = createSupplies(game);         // jars / crates on the field, food, wine, 虎符, 玄甲 (supplies/supplies.js)
@@ -81,6 +84,7 @@ const musouView = createMusouView(scene, game, camRig.camera);   // musou part: 
 const props = createProps(scene, game, vfx, camRig.camera);                      // goal beacons, the bundle by the well, fire ships, the ally
 const suppliesView = createSuppliesView(scene, game, vfx);
 const structures = createStructures(scene, game, vfx);            // altars / dams to break, the flood
+const basesView = createBasesView(scene, game, vfx);              // the camps and their standards
 const weather = createWeather(scene, camRig.camera);              // rain (STAGE.weather)
 // hud part: camera passed so officer name/HP tags can be projected over their heads (read-only)
 const hud = createHud(document.getElementById('hud'), game, { camera: camRig.camera });
@@ -109,6 +113,7 @@ function step() {
   game.supplies.step();
   if (game.boss) game.boss.step();
   game.campaign.step();
+  game.bases.step();
   game.musou.step();
   game.frame++;
   vfx.afterStep();
@@ -124,6 +129,7 @@ function render() {
   sigFx.update(dt);
   suppliesView.update();
   structures.update(dt);
+  basesView.update(dt);
   weather.update(dt);
   if (chargeFx) chargeFx.update(dt);
   if (bossView) bossView.update(dt);
@@ -217,11 +223,12 @@ function start() {
   result.hide();
   applyGear();
   game.hero.reset();
-  game.crowd.reset(); game.combat.reset(); game.musou.reset(); game.cam.reset(0);
+  game.crowd.reset(); game.combat.reset(); game.musou.reset(); game.cam.reset(game.hero.yaw);
   if (game.boss) game.boss.reset(), game.boss.st = 'off';
   game.campaign.reset();                         // before the army: with a script, the named officers wait for their goal
+  game.bases.reset();                            // camps back to their holders; spawnArmy garrisons the enemy's
   heroView.reset();
-  game.crowd.spawnArmy(Math.min(ENEMIES, game.crowd.grunts));
+  game.crowd.spawnArmy(Math.min(ENEMIES, game.crowd.grunts), game.hero.x, game.hero.z);
   if (params.has('musou')) game.hero.musou = game.hero.musouMax;   // debug: start with a full gauge
   emit('scenario', { name: 'arena' });
 }

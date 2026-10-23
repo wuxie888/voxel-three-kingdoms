@@ -10,19 +10,17 @@ import { buildCastle } from './castle.js';
 import { buildDressing } from './dressing.js';
 import { STAGE } from '../stages/index.js';
 import { buildSetpiece, blocked } from './setpieces.js';
+import { ARENA_RADIUS, WALL_Z, GATE_X, RIM, K } from './field.js';
+export { ARENA_RADIUS, WALL_Z, GATE_X };
 
-export const ARENA_RADIUS = 46;          // sim clamps hero/crowd inside this
-// castle wall face (sim clamps, minimap and the castle set): far enough back that its skyline (wall top, towers, sun
-// gap) fits under the gameplay frame's top edge
-export const WALL_Z = 100;
-export const GATE_X = -10;
 // burning barricades/carts at the arena rim: [x, y, z, scale] (ground scorch + fire + wreck)
-const FIELD_FIRES = [[-40, 0, 24, 1.3], [38, 0, -24, 1.2], [-22, 0, -44, 1.4], [30, 0, 36, 1.1], [-47, 0, -8, 1.0], [50, 0, 10, 1.3]];
+const FIELD_FIRES = [[-40, 0, 24, 1.3], [38, 0, -24, 1.2], [-22, 0, -44, 1.4], [30, 0, 36, 1.1], [-47, 0, -8, 1.0], [50, 0, 10, 1.3]]
+  .map(([x, y, z, s]) => [x * K, y, z * K, s]).filter(([x, , z]) => !blocked(x, z));
 // fire-attack stages ring the field with more blazes (evenly spread past the arena rim)
 for (let i = FIELD_FIRES.length; i < (STAGE.light.fires || 0); i++) {
-  const a = i * 2.39996, r = 44 + (i % 3) * 5;
+  const a = i * 2.39996, r = 44 + RIM + (i % 3) * 5;
   const x = Math.cos(a) * r, z = Math.sin(a) * r;
-  if (!blocked(x, z)) FIELD_FIRES.push([x, 0, Math.min(z, 80), 1 + (i % 4) * 0.15]);
+  if (!blocked(x, z)) FIELD_FIRES.push([x, 0, Math.min(z, 80 + RIM), 1 + (i % 4) * 0.15]);
 }
 const L = STAGE.light, FIRE_K = L.fire ?? 1;
 // key light: from behind-left of the wall-facing view, higher than the visible sun so the ground reads (hard shadows
@@ -57,7 +55,7 @@ export function createWorld(scene) {
   const dressing = buildDressing(scene, { wallZ: WALL_Z, gateX: GATE_X, castle, fieldFires: FIELD_FIRES, extraFires: setpiece.fires, blocked });
 
   // fire glow on the gate and on the two nearest field fires
-  const fireLights = [[GATE_X - 6.5, 2.2, WALL_Z - 3.5], [GATE_X + 7, 2.2, WALL_Z - 3.5], [-40, 2, 24]].map(([x, y, z]) => {
+  const fireLights = [[GATE_X - 6.5, 2.2, WALL_Z - 3.5], [GATE_X + 7, 2.2, WALL_Z - 3.5], [-40 * K, 2, 24 * K]].map(([x, y, z]) => {
     const l = new THREE.PointLight(0xff8a3a, 30, 11, 2); l.position.set(x, y, z); scene.add(l); return l;
   });
 

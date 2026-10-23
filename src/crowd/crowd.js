@@ -20,6 +20,7 @@
 import { rng } from '../core/rng.js';
 import { emit } from '../core/events.js';
 import { WALL_Z as WALL } from '../world/world.js';
+import { ARENA_RADIUS, K } from '../world/field.js';
 import { SET, RIVER, LEVEE, SOLIDS, pushOut } from '../world/setpieces.js';
 import { STAGE } from '../stages/index.js';
 import { HERO } from '../heroes/index.js';
@@ -47,7 +48,7 @@ export const CROWD = {
   grace: [90, 150], rally: [3, 5], rallyTime: 44,              // feints for 1.5-2.5 s after a blow lands (× difficulty); guards raising
   windup: 40, strike: 40, recover: 24, cooldown: [110, 260], officerCd: [40, 90],  // strike lands 0.67 s after wind-up starts
   dmg: 11, officerDmg: 28, hp: 30, captainHp: 80, officerHp: 520,
-  deadTime: 210, fieldR: 62,
+  deadTime: 210, fieldR: ARENA_RADIUS + 16,
   engaged: 84, transit: 72,                                   // director target: soldiers on the hero; cap on blocks en route
   halt: 15, haltFrames: 36, fold: 7.5,                        // squad: halt at 15 m, then charge, fold at 7.5 m
   wave: [8, 15], waveEvery: [45, 110], waveDist: [16, 26],   // columns every 0.75 s below half strength, else 1.8 s
@@ -66,7 +67,7 @@ export function createCrowd(game, grunts = 300) {
     rx: F(), rxV: F(), spinV: F(), pref: F(), band: I(), aggro: F(), phase: F(), hurtDur: I(), bounce: I(),
     lastHit: I(), strafe: F(), kod: I(), tokT: I(), ang: F(), seated: I(),
     squad: I(), slotX: F(), slotZ: F(), form: I(),
-    sq: { x: F(MAXSQ), z: F(MAXSQ), face: F(MAXSQ), st: I(MAXSQ), t: I(MAXSQ), n: 0 },
+    sq: { x: F(MAXSQ), z: F(MAXSQ), face: F(MAXSQ), st: I(MAXSQ), t: I(MAXSQ), base: I(MAXSQ), n: 0 },   // base: k + 1 for a camp's garrison
     raiseF: I(), feint: I(), wind: I(),                         // raiseF: rallying until (render + ring surge); feint strike; winding up
     armorF: I(),                                                // officers: armoured (no stagger) until this frame (combat breakout)
     frozen: I(),                                                // frames left frozen solid (冰 weapons, combat.js): no AI, no reaction
@@ -117,7 +118,7 @@ export function createCrowd(game, grunts = 300) {
     let q = -1;
     for (let k = 0; k < c.sq.n; k++) if (!c.sq.st[k]) { q = k; break; }
     if (q < 0) { if (c.sq.n >= MAXSQ) return -1; q = c.sq.n++; }
-    c.sq.x[q] = sx; c.sq.z[q] = sz; c.sq.face[q] = face; c.sq.st[q] = st; c.sq.t[q] = 0;
+    c.sq.x[q] = sx; c.sq.z[q] = sz; c.sq.face[q] = face; c.sq.st[q] = st; c.sq.t[q] = 0; c.sq.base[q] = 0;
     const sn = Math.sin(face), cs = Math.cos(face);
     const rows = Math.ceil((slots.length - 1) / cols);
     slots.forEach((i, k) => {
@@ -141,14 +142,16 @@ export function createCrowd(game, grunts = 300) {
    *  camera (toward the castle), most other squads stand on that side too, a few flank and close the rear. */
   c.spawnArmy = (count = grunts, cx = 0, cz = 0, near = 7) => {
     c.wavesOn = true;
-    const slots = freeSlots(false).slice(0, count);
+    const g0 = freeSlots(false).length;
+    game.bases?.garrison();                                    // the camps' garrisons first (stages/bases.js)
+    const slots = freeSlots(false).slice(0, Math.max(0, count - (g0 - freeSlots(false).length)));
     const fwd = game.cam.yaw;
     let k = 0, n = 0;
     while (k < slots.length) {
       const big = n === 0 && slots.length >= 120;
       const size = Math.min(slots.length - k, big ? rng.int(50, 60) : rng.int(18, 30));
       const a = big ? fwd + rng.range(-0.25, 0.25) : n % 3 === 2 ? fwd + Math.PI + rng.range(-1.4, 1.4) : fwd + rng.range(-1.8, 1.8);
-      const d = big ? rng.range(24, 28) : rng.range(near + 4, 34);
+      const d = big ? rng.range(24, 28) : rng.range(near + 4, 34 * Math.sqrt(K));       // a bigger field spreads the blocks wider
       let sx = cx + Math.sin(a) * d, sz = cz + Math.cos(a) * d;
       sz = Math.min(sz, WALL_Z - 6);
       const face = Math.atan2(cx - sx, cz - sz);
@@ -160,6 +163,23 @@ export function createCrowd(game, grunts = 300) {
       const a = rng.range(0, Math.PI * 2), d = rng.range(12, 30);
       place(i, cx + Math.cos(a) * d, cz + Math.sin(a) * d, false);
     }
+  };
+
+  /** Camp k's garrison: a block of n standing at (x, z), facing the middle of the field; the director leaves it be (it
+   *  charges when the hero walks into it). */
+  c.spawnGarrison = (k, x, z, n) => {
+    const slots = freeSlots(false).slice(0, n);
+    if (slots.length < 3) return;
+    const q = makeSquad(slots, x, z, Math.atan2(-x, -z), 4, SQ_HOLD);
+    if (q >= 0) c.sq.base[q] = k + 1;
+  };
+  /** A camp's 據點兵長 steps out at (x, z) with hp (a captain who makes for the hero). Returns his index (-1: no room). */
+  c.spawnCaptain = (x, z, hp) => {
+    const i = freeSlots(false)[0];
+    if (i == null) return -1;
+    place(i, x, z, true, KIND.CAPTAIN);
+    c.hpMax[i] = c.hp[i] = hp; setBand(i, 0);
+    return i;
   };
 
   /** Named officer k (c.names[k]; `name` [zh, en] puts a new man in the slot) joins the fight at (x, z) and makes for
@@ -409,7 +429,7 @@ export function createCrowd(game, grunts = 300) {
       if (!S.st[q]) continue;
       if (!alive[q]) { S.st[q] = 0; continue; }
       const dx = h.x - S.x[q], dz = h.z - S.z[q], d = Math.hypot(dx, dz) || 1e-6;
-      if (S.st[q] === SQ_HOLD) { if (d < holdD) { holdD = d; holdBest = q; } continue; }
+      if (S.st[q] === SQ_HOLD) { if (d < holdD && !S.base[q]) { holdD = d; holdBest = q; } continue; }   // garrisons hold their camp
       // wheel toward the hero (limited turn rate → the block visibly pivots)
       let da = Math.atan2(dx, dz) - S.face[q]; da = Math.atan2(Math.sin(da), Math.cos(da));
       S.face[q] += Math.max(-1.1 * DT, Math.min(1.1 * DT, da));
@@ -574,8 +594,9 @@ export function createCrowd(game, grunts = 300) {
 
   /** Reinforcement column in front of the camera when the field runs dry. */
   function waves(h) {
-    // columns keep coming while the ring is under strength, faster when it is below half
-    if (!c.wavesOn || ++c.waveT < CROWD.waveEvery[c.engaged < CROWD.engaged / 2 ? 0 : 1]) return;
+    // columns keep coming while the ring is under strength, faster when it is below half — and less often as the
+    // enemy loses its camps (stages/bases.js pressure)
+    if (!c.wavesOn || ++c.waveT < CROWD.waveEvery[c.engaged < CROWD.engaged / 2 ? 0 : 1] / (game.bases?.pressure() ?? 1)) return;
     if (c.engaged >= CROWD.engaged || holdNear) return;                  // a block waits closer: the director uses it
     const off = freeSlots(false);
     if (off.length < CROWD.wave[0]) return;
@@ -583,6 +604,8 @@ export function createCrowd(game, grunts = 300) {
     const n = Math.min(off.length, rng.int(CROWD.wave[0], CROWD.wave[1]));
     const a = game.cam.yaw + rng.range(-1.1, 1.1), d = rng.range(CROWD.waveDist[0], CROWD.waveDist[1]);
     let sx = h.x + Math.sin(a) * d, sz = h.z + Math.cos(a) * d;
+    const gate = game.bases?.source(h);                         // out of the nearest enemy camp when one is near
+    if (gate) { sx = gate[0] + rng.range(-1.5, 1.5); sz = gate[1] + rng.range(-1.5, 1.5); }
     const r = Math.hypot(sx, sz);
     if (r > CROWD.fieldR - 4) { sx *= (CROWD.fieldR - 4) / r; sz *= (CROWD.fieldR - 4) / r; }
     sz = Math.min(sz, WALL_Z - 4);

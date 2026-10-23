@@ -20,6 +20,7 @@ export const CAM = {
   // ≈14.6°, aim crossing the hero at 1.62 m → hero ≈ 45 % of frame height, feet ≈ 89 %, horizon ≈ 14 %.
   dist: 5.06, height: 1.62, pitch: 14.6 * DEG, fov: 40,
   follow: 18, followY: 20,  // position follow rates (1/s): re-centres in ≈0.2 s; a velocity lead removes the run lag
+  sprintFov: 5,             // degrees the view widens at a full 疾走 (hero/locomotion.js): the speed reads without a blur
   airLift: 0.7, airTilt: 0.03, // aerial: aim rises 0.7 m per m of hero height and the view tilts up 0.03 rad per m
   yawLerp: 12,              // render smoothing of the sim view yaw (manual orbit)
   drift: 1.1, driftMax: 1.2, // sim: view realigns behind the running hero at this rate (1/s), capped (rad/s): bench ≈ 1 s, lazy
@@ -218,7 +219,7 @@ export function createCameraRig(game, width, height) {
       if (shot) {
         if (shot.id !== cine.phase) { cine.phase = shot.id; snap = true; }
         ({ yaw: camYaw, dist, pitch, fov, height, side, shake: shakeK } = shot);
-      }
+      } else fov += CAM.sprintFov * (h.sprint || 0);
       const ky = 1 - Math.exp(-cfg.yawLerp * dt);
       yaw = snap ? camYaw : yaw + wrap(camYaw - yaw) * ky;
       // combat framing (gameplay rig only): pull out in dense crowds, bias the aim toward the nearby mob

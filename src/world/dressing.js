@@ -3,6 +3,7 @@
 // deterministic; nothing touches sim state.
 import * as THREE from 'three';
 import { STAGE } from '../stages/index.js';
+import { RIM, K } from './field.js';
 import { boxesGeometry, shade } from '../core/voxel.js';
 import { makeRng } from '../core/rng.js';
 import { figureGeometry } from './castle.js';
@@ -173,7 +174,7 @@ function camp(b, r, gateX, blocked = () => false) {
   // palisade of sharpened stakes
   for (let a = 0; a < Math.PI * 2; a += 0.0105) {
     if (!inArc(a) || r.chance(0.07)) continue;
-    const R = 64 + Math.sin(a * 5) * 2.5, x = Math.sin(a) * R, z = Math.cos(a) * R, hh = r.range(2.3, 3.1);
+    const R = 64 + RIM + Math.sin(a * 5) * 2.5, x = Math.sin(a) * R, z = Math.cos(a) * R, hh = r.range(2.3, 3.1);
     if (blocked(x, z)) continue;
     b.push({ s: [0.34, hh, 0.34], p: [x, hh / 2, z], r: [r.range(-0.08, 0.08), a, r.range(-0.1, 0.1)], c: shade(0x5a3d2a, r.range(0.75, 1.1)) });
     b.push({ s: [0.2, 0.35, 0.2], p: [x, hh + 0.15, z], c: shade(0x6e4c34, r.range(0.8, 1.1)) });
@@ -183,7 +184,7 @@ function camp(b, r, gateX, blocked = () => false) {
   for (let i = 0; i < 16; i++) {
     const a = Math.PI * (0.62 + r.range(-0.36, 0.36) + (i % 2 ? 0.5 : -0.5) * r.range(0, 0.4)) + (i < 8 ? 0 : Math.PI);
     if (!inArc(a)) continue;
-    const R = r.range(72, 98), x = Math.sin(a) * R, z = Math.cos(a) * R;
+    const R = r.range(72, 98) + RIM, x = Math.sin(a) * R, z = Math.cos(a) * R;
     if (blocked(x, z)) continue;
     const col = r.chance(0.5) ? 0x8a3025 : 0xb09a7c, w = r.range(4, 6), d = r.range(4.5, 7);
     for (let k = 0; k < 5; k++) b.push({ s: [w * (1 - k * 0.19), 0.7, d], p: [x, 0.35 + k * 0.7, z], r: [0, a, 0], c: shade(col, 1 - k * 0.04) });
@@ -192,7 +193,7 @@ function camp(b, r, gateX, blocked = () => false) {
   // cheval-de-frise barricades at the arena rim (not on the gate road)
   for (let i = 0; i < 14; i++) {
     const a = (i / 14) * Math.PI * 2 + r.range(-0.1, 0.1);
-    const x = Math.sin(a) * r.range(49, 53), z = Math.cos(a) * r.range(49, 53);
+    const x = Math.sin(a) * (r.range(49, 53) + RIM), z = Math.cos(a) * (r.range(49, 53) + RIM);
     if ((z > 30 && Math.abs(x - gateX) < 14) || blocked(x, z)) continue;
     const yaw = a + Math.PI / 2 + r.range(-0.3, 0.3);
     b.push({ s: [5, 0.34, 0.34], p: [x, 0.55, z], r: [0, yaw, 0], c: 0x4a3222 });
@@ -205,7 +206,7 @@ function camp(b, r, gateX, blocked = () => false) {
   for (let i = 0; i < 26; i++) {
     const a = r.range(0, Math.PI * 2);
     if (!inArc(a)) continue;
-    const R = r.range(55, 62), x = Math.sin(a) * R, z = Math.cos(a) * R, s = r.range(0.7, 1.1);
+    const R = r.range(55, 62) + RIM, x = Math.sin(a) * R, z = Math.cos(a) * R, s = r.range(0.7, 1.1);
     if (blocked(x, z)) continue;
     b.push({ s: [s, s, s], p: [x, s / 2, z], r: [0, r.range(0, 3), 0], c: shade(0x6e5038, r.range(0.8, 1.1)) });
     if (r.chance(0.5)) b.push({ s: [s * 0.8, s * 0.8, s * 0.8], p: [x + 0.2, s + s * 0.4, z], r: [0, r.range(0, 3), 0], c: shade(0x5a4030, r.range(0.8, 1.1)) });
@@ -245,18 +246,18 @@ export function buildDressing(scene, { wallZ, gateX, castle, fieldFires, extraFi
   for (let i = 0; i < 22; i++) {
     const a = (i / 22) * Math.PI * 2 + r.range(-0.08, 0.08);
     if (Math.cos(a) > 0.62) continue;                                    // keep the castle view clear
-    const R = i % 2 ? r.range(47, 52) : r.range(58, 62);
+    const R = (i % 2 ? r.range(47, 52) : r.range(58, 62)) + RIM;
     standard(Math.sin(a) * R, Math.cos(a) * R, r.range(0.95, 1.25), r.chance(0.15) ? mats.red : mats.wei);
   }
   // the flank toward the watchtowers: a cluster of big standards (concept left side)
-  for (const [x, z, s] of [[40, 30, 1.35], [47, 22, 1.2], [36, 40, 1.1], [52, 34, 1.25]]) standard(x, z, s);
+  for (const [x, z, s] of [[40, 30, 1.35], [47, 22, 1.2], [36, 40, 1.1], [52, 34, 1.25]]) standard(x * K, z * K, s);
   // castle arc: the siege line of standards just outside the arena (R 47-57, never between a wall-facing camera and
   // the hero), cloth at ≈ 2.7-7 m so it sits inside the gameplay frame's top band; clear of the gate and the 蜀 drape
   for (const [x, z, s, red] of [[-57, 10, 1.1], [-51, 21, 1.05], [-43, 30, 1, 1], [-33, 39, 1.1], [-2, 48, 1.05], [8, 49, 1], [24.5, 42, 1.1], [36, 33, 1.05, 1]]) {
-    standard(x, z, s, red ? mats.red : mats.wei, 7.3 * s);
+    standard(x * K, z * K, s, red ? mats.red : mats.wei, 7.3 * s);
   }
   // … and a few out on the open flank beside the watchtowers (the sun gap and the tower cabins stay clear)
-  for (const [x, z, s] of [[52, 74, 1.25], [62, 58, 1.2], [74, 70, 1.3]]) standard(x, z, s);
+  for (const [x, z, s] of [[52, 74, 1.25], [62, 58, 1.2], [74, 70, 1.3]]) standard(x, z + RIM, s);
   // 蜀: great banner draped on the wall beside the gate, flags along the wall walk, towers
   addCloth(mats.shu, 7.5, 9.5, 'drape', gateX - 18 + 3.75, castle.H - 0.3, wallZ - 0.35, Math.PI);   // faces the arena (-Z)
   poles.push({ s: [8.6, 0.35, 0.35], p: [gateX - 18, castle.H - 0.15, wallZ - 0.4], c: 0x3b2a1e });
@@ -273,7 +274,7 @@ export function buildDressing(scene, { wallZ, gateX, castle, fieldFires, extraFi
   // Wei reserve army massed beyond the palisade, out to the haze (instanced, idle bob) — "troops to the horizon"
   const troops = [];
   for (let f = 0; f < 26; f++) {
-    const a = r.range(0, Math.PI * 2), R = r.range(76, 170), cx = Math.sin(a) * R, cz = Math.cos(a) * R, face = Math.atan2(-cx, -cz);
+    const a = r.range(0, Math.PI * 2), R = r.range(76, 170) + RIM, cx = Math.sin(a) * R, cz = Math.cos(a) * R, face = Math.atan2(-cx, -cz);
     if (Math.cos(a) > 0.35 && cx < castle.x1 + 22) continue;               // none behind the wall; the open flank is fair
     const cols = r.int(8, 16), rows = r.int(5, 10);
     for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
@@ -294,8 +295,8 @@ export function buildDressing(scene, { wallZ, gateX, castle, fieldFires, extraFi
 
   // fallen standards lying in the dirt (flat, never occlude)
   const fallenMat = new THREE.MeshStandardMaterial({ map: mats.wei.map, color: 0x9a8a80, side: THREE.DoubleSide, alphaTest: 0.5, roughness: 0.95 });   // trampled, dusty
-  for (let i = 0; i < 7; i++) {
-    const a2 = r.range(0, 6.28), d = r.range(12, 42), x = Math.sin(a2) * d, z = Math.cos(a2) * d, yaw = r.range(0, 6.28);
+  for (let i = 0; i < Math.round(7 * K * K); i++) {
+    const a2 = r.range(0, 6.28), d = r.range(12, 42) * K, x = Math.sin(a2) * d, z = Math.cos(a2) * d, yaw = r.range(0, 6.28);
     const c = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 4.3, 3, 4), fallenMat);
     c.rotation.set(-Math.PI / 2, 0, yaw); c.position.set(x, 0.14, z); c.receiveShadow = true;
     scene.add(c);
@@ -309,7 +310,7 @@ export function buildDressing(scene, { wallZ, gateX, castle, fieldFires, extraFi
   const dustTex = new THREE.CanvasTexture(dc);
   const dusts = [];
   for (let i = 0; i < 34; i++) {
-    const wall = i < 14, a = r.range(0, Math.PI * 2), R = r.range(52, 90);
+    const wall = i < 14, a = r.range(0, Math.PI * 2), R = r.range(52, 90) + RIM;
     const x = wall ? r.range(-80, castle.x1) : Math.sin(a) * R, z = wall ? wallZ - r.range(3, 12) : Math.cos(a) * R;
     if (!wall && Math.cos(a) > 0.5) continue;
     // wall-foot banks kept thin: the stone coursing, ladders and banners must read through them
@@ -325,8 +326,9 @@ export function buildDressing(scene, { wallZ, gateX, castle, fieldFires, extraFi
   camp(props, r, gateX, blocked);
   // battle debris, all low so nothing blocks the fight: arrow volleys stuck in the ground, wrecked carts under the
   // field fires, rubble at the wall foot
-  for (let c = 0; c < 26; c++) {
-    const a = r.range(0, 6.28), d = r.range(8, 44), cx = Math.sin(a) * d, cz = Math.cos(a) * d, tilt = r.range(0.2, 0.5), dir = r.range(-0.4, 0.4) + 2.5;
+  for (let c = 0; c < Math.round(26 * K * K); c++) {
+    const a = r.range(0, 6.28), d = r.range(8, 44) * K, cx = Math.sin(a) * d, cz = Math.cos(a) * d, tilt = r.range(0.2, 0.5), dir = r.range(-0.4, 0.4) + 2.5;
+    if (blocked(cx, cz)) continue;
     for (let k = 0; k < r.int(5, 12); k++) {
       const x = cx + r.range(-1.6, 1.6), z = cz + r.range(-1.6, 1.6);
       props.push({ s: [0.035, 0.85, 0.035], p: [x, 0.3, z], r: [tilt, dir, 0], c: 0x4a3524 }, { s: [0.09, 0.14, 0.02], p: [x + Math.sin(dir) * Math.sin(tilt) * 0.4, 0.3 + Math.cos(tilt) * 0.4, z + Math.cos(dir) * Math.sin(tilt) * 0.4], r: [tilt, dir, 0], c: 0xd8cfc0 });
@@ -357,7 +359,8 @@ export function buildDressing(scene, { wallZ, gateX, castle, fieldFires, extraFi
   // far-off burning (camp, flanks, inside the castle) at 110-150 m: big bonfires that put warm points of fire into the
   // hazy mauve band behind the fight — a battlefield ablaze to the horizon. Off the sun's bearing and the gate view;
   // not in world.fires (vfx embers spawn at those).
-  const farFires = [[-45, 0, -112, 3.2], [38, 0, -150, 3.6], [-100, 0, -88, 3], [-128, 0, 22, 3.4], [112, 0, -34, 3.2], [-62, 0, 88, 3.4]];
+  const farFires = [[-45, 0, -112, 3.2], [38, 0, -150, 3.6], [-100, 0, -88, 3], [-128, 0, 22, 3.4], [112, 0, -34, 3.2], [-62, 0, 88, 3.4]]
+    .map(([x, y, z, s]) => { const d = Math.hypot(x, z), k = (d + RIM) / d; return [x * k, y, z * k, s]; });
   const updateFire = fireSystem(scene, fireSpots.concat(farFires));
   // world.fires contract (vfx embers read .position of ground-level fires)
   const fires = fireSpots.filter((f) => f[1] < 1).map(([x, y, z]) => ({ position: new THREE.Vector3(x, y, z) }));

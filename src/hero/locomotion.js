@@ -12,6 +12,10 @@ export const LOCO = {
   turnRate: 36,         // rad/s: 180° in 5 sim frames (benchmark ≤ 6)
   turnSlow: 0.3,        // fraction of speed shed at the peak of a 180° snap turn (≈4 H/s straight away)
   dashAfter: 14,        // frames of running before attack becomes a dash attack
+  // 疾走 (sprint): after 1.5 s of running straight on, the stride opens up to ×1.35 over 0.5 s — the big fields
+  // (field.js) are 4× the old ring, so getting from camp to camp should not be a chore. Stopping, attacking, dodging
+  // or a hard turn drops it (h.sprint 0..1; h.sprintT counts the frames of this run, hero.js resets both).
+  sprintAfter: 90, sprintRamp: 30, sprintK: 1.35,
   // dive roll: 24 frames (0.40 s) total, run-cancel at 20 (0.33 s), attack at 14, re-dodge at 16
   dodgeFrames: 24, dodgeDist: 4.6, dodgeIFrames: [0, 16], dodgeAttackCancel: 14, dodgeRedodge: 16, dodgeRunCancel: 20,
   jumpV: 12.6, gravity: 28, airControl: 14, hoverG: 0.3,
@@ -55,6 +59,9 @@ export function turnToward(h, targetYaw, maxStep) {
 export function setState(h, s) { if (h.state !== s) { h.state = s; h.stateT = 0; } }
 
 /** Banked lean fed to the run pose (h.anim.lean, + = leaning left); decays outside the run. */
+/** Speed factor of the sprint (1 → LOCO.sprintK, eased in). */
+export const sprintK = (h) => { const u = h.sprint || 0; return 1 + (LOCO.sprintK - 1) * u * u * (3 - 2 * u); };
+
 function bank(h, dyaw) {
   const want = clamp(dyaw * 60 * h.speed * 0.02, -0.42, 0.42);
   h.anim.lean += (want - h.anim.lean) * 0.35;
@@ -73,8 +80,8 @@ export function stepLocomotion(h, inp, camYaw) {
     if (h.stateT >= LOCO.landFrames || (mag && h.stateT >= LOCO.landRunCancel)) setState(h, mag ? 'run' : 'idle');
     else { h.vx *= 0.75; h.vz *= 0.75; h.speed = Math.hypot(h.vx, h.vz); h.anim.lean *= 0.7; return; }
   }
-  if (!h.grounded) {                       // air control (momentum from the run carries)
-    const tvx = dx * LOCO.runSpeed * (h.spdK || 1) * mag, tvz = dz * LOCO.runSpeed * (h.spdK || 1) * mag;
+  if (!h.grounded) {                       // air control (momentum from the run carries, a sprint's too)
+    const v = LOCO.runSpeed * (h.spdK || 1) * sprintK(h) * mag, tvx = dx * v, tvz = dz * v;
     if (mag) {
       h.vx += Math.max(-LOCO.airControl * DT, Math.min(LOCO.airControl * DT, tvx - h.vx));
       h.vz += Math.max(-LOCO.airControl * DT, Math.min(LOCO.airControl * DT, tvz - h.vz));
@@ -90,7 +97,9 @@ export function stepLocomotion(h, inp, camYaw) {
     if (sp0 < 1.5 && h.state !== 'run') h.yaw = want;          // from a standstill: face the stick at once
     else turnToward(h, want, LOCO.turnRate * DT);
     const left = Math.abs(wrap(want - h.yaw));                  // still turning → shed some speed (no skid)
-    const target = LOCO.runSpeed * (h.spdK || 1) * mag * (1 - LOCO.turnSlow * left / Math.PI);   // 疾風 gear: spdK
+    if (left > 1.6) h.sprint = Math.max(0, (h.sprint || 0) - 0.15);                      // a hard turn checks the sprint
+    else if (++h.sprintT >= LOCO.sprintAfter && mag > 0.8) h.sprint = Math.min(1, (h.sprint || 0) + 1 / LOCO.sprintRamp);
+    const target = LOCO.runSpeed * (h.spdK || 1) * sprintK(h) * mag * (1 - LOCO.turnSlow * left / Math.PI);   // 疾風 gear: spdK
     sp = sp0 + clamp(target - sp0, -LOCO.decel * DT, LOCO.accel * DT);
     h.vx = Math.sin(h.yaw) * sp; h.vz = Math.cos(h.yaw) * sp;  // velocity follows facing: tight arc, no drift
     setState(h, 'run');
@@ -99,7 +108,7 @@ export function stepLocomotion(h, inp, camYaw) {
     const st = LOCO.decel * DT;
     if (sp0 > st) { h.vx -= h.vx / sp0 * st; h.vz -= h.vz / sp0 * st; } else { h.vx = h.vz = 0; }
     sp = Math.max(0, sp0 - st);
-    h.runT = 0;
+    h.runT = 0; h.sprint = h.sprintT = 0;
     if (h.state === 'run' && sp < 1.5) setState(h, 'idle');
   }
   h.speed = sp;
@@ -122,7 +131,7 @@ export function startDodge(h, inp, camYaw) {
   h.state = 'dodge'; h.stateT = 0;        // always restart (setState keeps stateT when already dodging → dead 2nd dodge)
   h.dodgeSeq = (h.dodgeSeq || 0) + 1;     // re-triggers the anim blend for dodge → dodge
   h.iframes = LOCO.dodgeIFrames[1];
-  h.vx = h.vz = 0; h.speed = 0; h.runT = 0;
+  h.vx = h.vz = 0; h.speed = 0; h.runT = 0; h.sprint = h.sprintT = 0;
   emit('dodge', { x: h.x, y: h.y, z: h.z, dx, dz });
 }
 

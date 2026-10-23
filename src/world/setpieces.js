@@ -15,18 +15,19 @@ import { makeRng } from '../core/rng.js';
 import { boxesGeometry, shade } from '../core/voxel.js';
 import { noise2 } from './terrain.js';
 import { STAGE } from '../stages/index.js';
+import { RIM, WALL_Z } from './field.js';
 
 export const SET = STAGE.set || null;
-export const RIVER = { z0: 49, z1: 95 };   // the near bank just past the arena rim (46 m), in the default view
-export const LEVEE = { z0: 46.5, z1: 48.6, h: 1.9 };                // 樊城: the earthen levee in front of the river
-export const STREAM = { z0: -54, z1: -48, x: 0, deckY: 0.42 };   // 長坂坡: behind the start, past the rim; bridge at x
+export const RIVER = { z0: 49 + RIM, z1: 95 + RIM };   // the near bank just past the arena rim, in the default view
+export const LEVEE = { z0: 46.5 + RIM, z1: 48.6 + RIM, h: 1.9 };     // 樊城: the earthen levee in front of the river
+export const STREAM = { z0: -54 - RIM, z1: -48 - RIM, x: 0, deckY: 0.42 };   // 長坂坡: behind the start, past the rim; bridge at x
 const WELL = STAGE.props?.find((p) => p.kind === 'well')?.at;
 const lit = () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, flatShading: true });
 
 /** Rock wall edge |x| on side s (+1 / −1) at depth z: wide open over the arena, closing on the gate past z 40. */
 function edge(s, z) {
-  const far = s > 0 ? 12 : 34, u = Math.min(1, Math.max(0, (z - 40) / 60));
-  return 50 + (far - 50) * u * u * (3 - 2 * u);
+  const far = s > 0 ? 12 : 34, near = 50 + RIM, u = Math.min(1, Math.max(0, (z - (WALL_Z - 60)) / 60));
+  return near + (far - near) * u * u * (3 - 2 * u);
 }
 const PROP_AT = (STAGE.props || []).flatMap((p) => (Array.isArray(p.at[0]) ? p.at : [p.at]));
 /** Solid props (circles [x, z, r]) the hero and the soldiers walk round: the altars, the dams' faces, the well. */
@@ -49,14 +50,16 @@ export function pushOut(x, z, r) {
   }
   return hit;
 }
+const CAMPS = STAGE.map?.bases || [];
 export function blocked(x, z) {
   if (PROP_AT.some(([px, pz]) => Math.hypot(x - px, z - pz) < 5)) return true;   // nothing stands on an altar, a dam, the well
+  if (CAMPS.some((b) => Math.hypot(x - b.at[0], z - b.at[1]) < 12)) return true;  // … or inside a camp
   if (SET === 'river') return z > RIVER.z0 - 3 && z < RIVER.z1 + 1;
   if (SET === 'flood') return z > LEVEE.z0 - 3 && z < RIVER.z1 + 1;
   if (SET === 'pass') return Math.abs(x) > edge(Math.sign(x) || 1, z) - 3;
   if (SET === 'stream') {
     if (WELL && Math.hypot(x - WELL[0], z - WELL[1]) < 5) return true;
-    return (z > STREAM.z0 - 3 && z < STREAM.z1 + 3) || (Math.abs(x - STREAM.x) < 10 && z < -42);   // the stream, the road over the bridge
+    return (z > STREAM.z0 - 3 && z < STREAM.z1 + 3) || (Math.abs(x - STREAM.x) < 10 && z < STREAM.z1 + 6);   // the stream, the road over the bridge
   }
   return false;
 }
@@ -125,8 +128,8 @@ function buildRiver(scene) {
   // the chained fleet: two staggered lines, iron chains between neighbours; most of the near line burns
   const hulls = [];
   for (let i = 0; i < 9; i++) {
-    const x = -130 + i * 30 + r.range(-3, 3), z = i & 1 ? 80 : 62, yaw = r.range(-0.08, 0.08), s = r.range(0.95, 1.1);   // broadside (hull along x)
-    fires.push(...ship(b, r, x, z, yaw, s, r.chance(z < 75 ? 0.75 : 0.5)));
+    const x = -130 + i * 30 + r.range(-3, 3), z = (i & 1 ? 80 : 62) + RIM, yaw = r.range(-0.08, 0.08), s = r.range(0.95, 1.1);   // broadside (hull along x)
+    fires.push(...ship(b, r, x, z, yaw, s, r.chance(z < 75 + RIM ? 0.75 : 0.5)));
     hulls.push([x, z]);
   }
   for (let i = 0; i + 1 < hulls.length; i++) {                         // 連環: chains ship to ship
@@ -157,11 +160,11 @@ function buildPass(scene) {
   const b = [], S = 4;
   const strata = [0x4e3e30, 0x5e4a38, 0x423428, 0x68523e, 0x4a3a2c];   // dark enough to hold their layers in the bright noon look
   for (const s of [1, -1]) {
-    for (let z = -180; z < 106; z += S) {
+    for (let z = -180 - RIM; z < WALL_Z + 6; z += S) {
       const e = edge(s, z);
       for (let k = 0; k < 11; k++) {
         const x = s * (e + k * S + S / 2), n = noise2(x * 0.05, z * 0.05, 11), n2 = noise2(x * 0.2, z * 0.2, 12);
-        const h = Math.min(58, 7 + k * 4.4 + n * 14 + n2 * 4) * (z > 96 ? 0.85 : 1);
+        const h = Math.min(58, 7 + k * 4.4 + n * 14 + n2 * 4) * (z > WALL_Z - 4 ? 0.85 : 1);
         // rock in horizontal strata (stacked slabs, each a little in or out), a mossy cap on top
         let y = 0, i = 0;
         while (y < h - 0.5) {
@@ -203,6 +206,17 @@ function buildStream(scene) {
     b.push({ s: [3.6, 0.2, 0.2], p: [X, -0.1, z], r: [0, 0, 0.35], c: 0x3a2618 });                         // cross brace
   }
   for (const sx of [-1, 1]) for (const y of [Y + 0.55, Y + 1.0]) b.push({ s: [0.14, 0.14, zN - zS + 1.6], p: [X + sx * (W / 2 - 0.12), y, (zN + zS) / 2], c: shade(0x5a3d26, y > 1 ? 1 : 0.85) });
+  // the burnt-out village: roofless house shells, charred beams, collapsed tiles (the ruins the hero searches)
+  for (const [hx, hz] of STAGE.props?.find((p) => p.kind === 'ruins')?.at || []) {
+    const yaw = r.range(0, 3), c = Math.cos(yaw), sn = Math.sin(yaw), at = (lx, lz) => [hx + lx * c + lz * sn, hz - lx * sn + lz * c];
+    for (const [lx, lz, w, d] of [[0, -2.6, 6, 0.4], [0, 2.6, 6, 0.4], [-3, 0, 0.4, 5.6], [3, 0, 0.4, 5.6]]) {
+      const hgt = r.range(1.2, 2.6), [x, z] = at(lx, lz);
+      if (lx === 0 && lz < 0) { for (const s of [-1, 1]) { const [px, pz] = at(s * 2, lz); b.push({ s: [2, hgt, 0.4], p: [px, hgt / 2, pz], r: [0, yaw, 0], c: shade(0x8a7a66, r.range(0.7, 0.95)) }); } continue; }   // the doorway
+      b.push({ s: [w, hgt, d], p: [x, hgt / 2, z], r: [0, yaw, 0], c: shade(0x8a7a66, r.range(0.7, 0.95)) });
+    }
+    for (let k = 0; k < 5; k++) { const [x, z] = at(r.range(-2.4, 2.4), r.range(-2, 2)); b.push({ s: [r.range(2, 3.5), 0.22, 0.22], p: [x, r.range(0.2, 1.4), z], r: [r.range(-0.4, 0.4), r.range(0, 3), r.range(-0.6, 0.6)], c: 0x1e1410 }); }
+    for (let k = 0; k < 10; k++) { const [x, z] = at(r.range(-2.6, 2.6), r.range(-2.2, 2.2)); b.push({ s: [0.6, 0.1, 0.4], p: [x, 0.06, z], r: [0, r.range(0, 3), r.range(-0.3, 0.3)], c: shade(0x4a4048, r.range(0.7, 1)) }); }
+  }
   // the dry well in the burnt-out village: stone ring, windlass frame, a fallen bucket, broken cart and planks
   if (WELL) {
     const [wx, wz] = WELL;

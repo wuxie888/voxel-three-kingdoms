@@ -39,7 +39,7 @@ export function createTouch(input, game, { onPause }) {
   // ---- stick (left half) and camera swipe (right half): touches that start on the game, not on a button
   let sid = null, sx = 0, sy = 0, cid = null, cx = 0;
   addEventListener('pointerdown', (e) => {
-    if (e.pointerType !== 'touch' || !on || e.target.closest('button,a,#menu,#result')) return;
+    if (e.pointerType !== 'touch' || !on || e.target.closest('button,a,#menu,#result,.h-map')) return;
     if (e.clientX < innerWidth * 0.48 && sid === null) {
       sid = e.pointerId; sx = e.clientX; sy = e.clientY;
       stick.style.transform = `translate(${sx}px, ${sy}px)`; stick.classList.add('on'); knob.style.transform = '';

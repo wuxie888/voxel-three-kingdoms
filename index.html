@@ -187,6 +187,12 @@
   @keyframes goalPop { from { transform: translateX(3rem); filter: brightness(2); } to { transform: none; filter: none; } }
   #hud .h-band p b.gl { display: inline-block; margin-right: 1.2rem; padding: .2rem .7rem; font: 700 1.9rem/1.2 var(--brush); color: #1a120d;
     background: linear-gradient(#ffe7a3, #f2c14e 55%, #c98a22); border-radius: .3rem; vertical-align: .2rem; letter-spacing: .2rem; }
+  /* camp captains (據點兵長): a small tag with a health bar over the crest */
+  #hud .h-caps { inset: 0; }
+  #hud .cap { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; }
+  #hud .cap b { position: absolute; left: -7rem; width: 14rem; bottom: 1.1rem; text-align: center; font: 700 1.7rem/1 var(--brush); color: #ffc49a; }
+  #hud .cap .bar { position: absolute; left: -5.5rem; width: 11rem; bottom: .2rem; height: .6rem; }
+  #hud .cap .bar i { background: linear-gradient(#ffb49a 0 20%, #e0442e 35%, #8e1c10); }
   /* waypoints: a marker over a spot to take, or an arrow at the screen edge toward the goal */
   #hud .h-ways { inset: 0; }
   #hud .way { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; }
@@ -231,6 +237,9 @@
 
   /* minimap: square battlefield map + 蜀/魏 morale bar (top right) */
   #hud .h-map { right: 2.4%; top: 4.2rem; width: 20rem; }
+  #hud .h-map { pointer-events: auto; cursor: pointer; transition: transform .25s, right .25s, top .25s; }
+  #hud .h-map .mhint { position: absolute; right: .4rem; bottom: .4rem; font: 700 .95rem/1 var(--sans); letter-spacing: .1em; opacity: .55; }
+  #hud .h-map.big { right: 50%; top: 50%; transform: translate(50%, -50%) scale(3.1); z-index: 4; }
   #hud .h-map canvas { display: block; width: 20rem; height: 20rem; box-shadow: 0 0 0 .1rem rgba(214,184,130,.75), 0 0 0 .25rem rgba(0,0,0,.45), 0 .4rem 1rem rgba(0,0,0,.4); }
   #hud .morale { position: relative; height: .5rem; margin: 0 0 .7rem; background: #c0392b; box-shadow: 0 0 0 .1rem rgba(0,0,0,.6); }
   #hud .morale i { position: absolute; inset: 0; background: linear-gradient(#8fc4ff, #2f6fd0); transform-origin: 0 50%; }
@@ -515,15 +524,16 @@
   <div class="opts"><div class="diff" id="diff"><span>難度<small>DIFFICULTY</small></span></div><div class="diff" id="gfx"><span>畫質<small>GRAPHICS</small></span></div></div>
   <div class="sub" id="tagline"></div>
   <div class="keys">
-    <div><span>移動<small>MOVE</small></span><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows</span></div>
+    <div><span>移動<small>MOVE</small></span><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows · run on to sprint</span></div>
     <div><span>攻擊<small>ATTACK</small></span><span><kbd>J</kbd> / left click · combo</span></div>
     <div><span>蓄力<small>CHARGE</small></span><span><kbd>K</kbd> / right click · mid-combo</span></div>
     <div><span>跳躍<small>JUMP</small></span><span><kbd>Space</kbd></span></div>
     <div><span>閃避<small>DODGE</small></span><span><kbd>L</kbd> / <kbd>Shift</kbd></span></div>
     <div><span>無雙<small>MUSOU</small></span><span><kbd>I</kbd> · gold gauge full</span></div>
     <div><span>視角<small>CAMERA</small></span><span><kbd>Q</kbd><kbd>E</kbd> / drag</span></div>
+    <div><span>全圖<small>MAP</small></span><span><kbd>M</kbd> / click the minimap</span></div>
   </div>
-  <div class="tguide"><b>左半屏</b> 移動 · <b>攻</b> 攻擊 · <b>蓄</b> 蓄力 · <b>跳</b> 跳躍 · <b>閃</b> 閃避 · <b>無雙</b> 槽滿時發動 · <b>右半屏滑動</b> 視角</div>
+  <div class="tguide"><b>左半屏</b> 移動 · <b>攻</b> 攻擊 · <b>蓄</b> 蓄力 · <b>跳</b> 跳躍 · <b>閃</b> 閃避 · <b>無雙</b> 槽滿時發動 · <b>右半屏滑動</b> 視角 · <b>小地圖</b> 全圖</div>
   <div class="gobar"><button id="go">出陣<small>START</small></button><button id="storyBtn">劇情<small>STORY</small></button><button id="arm">武庫<small>ARMORY</small></button></div>
   <div class="hint">← → 選將 hero · ↑ ↓ 選戰場 battle · Enter to start · Esc to pause · gamepad supported · best with keyboard, mouse and sound on</div>
 </div>

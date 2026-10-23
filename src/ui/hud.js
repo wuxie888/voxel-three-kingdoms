@@ -31,7 +31,7 @@ export function createHud(root, game, { camera = null } = {}) {
       <div class="keys"><kbd>WASD</kbd> 移動 move · <kbd>J</kbd> 攻擊 attack · <kbd>K</kbd> 蓄力 charge<br>
         <kbd>Space</kbd> 跳躍 jump · <kbd>L</kbd> 閃避 dodge · <kbd>I</kbd> 無雙 musou · <kbd>Q</kbd><kbd>E</kbd> 視角 · <kbd>H</kbd> 說明</div></div>
     <div class="h-target"><i class="seal">將</i><b></b><span></span><div class="bar"><em></em><i></i></div><strong>擊破</strong></div>
-    <div class="h-map"><div class="morale"><i></i><span>${STAGE.ally.label}</span><span>${STAGE.enemy.ch}</span></div><canvas width="200" height="200"></canvas><i class="seal">${STAGE.seal}</i></div>
+    <div class="h-map"><div class="morale"><i></i><span>${STAGE.ally.label}</span><span>${STAGE.enemy.ch}</span></div><canvas width="400" height="400"></canvas><i class="seal">${STAGE.seal}</i><small class="mhint">M · 全圖</small></div>
     <div class="h-offs">${OFFICERS.map(([zh, en]) => `<div class="off"><i class="ld"></i><div class="mk">▼▼</div><div class="bd"><b>${zh}</b><span>${en}</span><div class="bar"><em></em><i></i></div></div></div>`).join('')}</div>
     <div class="h-chain"><div class="num"><b class="dig" data-t="0"><span>0</span></b><u></u><u></u><u></u></div><small><em>連擊</em>CHAIN</small></div>
     <div class="h-mile"><b class="dig" data-t="50"><span>50</span></b><i class="seal">擊破</i></div>
@@ -39,6 +39,7 @@ export function createHud(root, game, { camera = null } = {}) {
     <div class="h-dlg"><canvas width="20" height="20"></canvas><i class="seal"></i><div><b><em>${HERO.zh}</em> <span>${HERO.en}</span></b><p></p><small></small></div></div>
     <div class="h-goal"><i class="seal">目標</i><div><b></b><small></small><div class="cap"><i></i></div></div><span class="pg"></span></div>
     <div class="h-ways">${[0, 1, 2].map(() => '<div class="way"><i></i><b></b><span></span></div>').join('')}</div>
+    <div class="h-caps">${[0, 1, 2].map(() => '<div class="cap"><b>據點兵長</b><div class="bar"><i></i></div></div>').join('')}</div>
     <div class="h-copy">${HERO.copy}</div>
     <div class="h-player"><div class="badge"><canvas width="20" height="20"></canvas></div><div class="name">${HERO.zh}<small class="lv"></small></div>
       <div class="bar hp"><em></em><i></i></div>
@@ -58,11 +59,17 @@ export function createHud(root, game, { camera = null } = {}) {
   const toast = $('.h-toast'), toastB = $('.h-toast b'), toastS = $('.h-toast small'), lvEl = $('.name .lv');
   const goalEl = $('.h-goal'), goalB = $('.h-goal b'), goalS = $('.h-goal small'), goalPg = $('.h-goal .pg'), goalCap = $('.h-goal .cap'), goalCapI = $('.h-goal .cap i');
   const ways = $$('.h-ways .way').map((el) => ({ el, i: el.querySelector('i'), b: el.querySelector('b'), sp: el.querySelector('span') }));
+  const capTags = $$('.h-caps .cap').map((el) => ({ el, bar: el.querySelector('.bar i') }));
   const target = $('.h-target'), targetB = $('.h-target b'), targetS = $('.h-target span'), targetI = $('.h-target .bar i'), targetE = $('.h-target .bar em');
   const offs = $$('.off').map((el) => ({ el, bd: el.querySelector('.bd'), mk: el.querySelector('.mk'), ld: el.querySelector('.ld'),
     bar: el.querySelector('.bar i'), lagEl: el.querySelector('.bar em'), lag: 1, nb: el.querySelector('.bd b'), ns: el.querySelector('.bd span') }));
   const moraleI = $('.morale i'), mapEl = $('.h-map');
   const mapCv = $('.h-map canvas'), map = mapCv.getContext('2d');
+  // M (or a tap on the map): the whole battlefield, centred on the field, instead of the patch round the hero
+  let bigMap = false;
+  const toggleMap = () => { bigMap = !bigMap; mapEl.classList.toggle('big', bigMap); };
+  addEventListener('keydown', (e) => { if (e.code === 'KeyM' && !e.repeat) toggleMap(); });
+  mapEl.addEventListener('pointerdown', (e) => { e.stopPropagation(); toggleMap(); });
   $$('canvas[width="20"]').forEach((cv) => paintPortrait(cv));
   // dialogue speakers: the hero, an ally officer, the boss (pixel portraits) or a named enemy officer (red seal)
   const cp = game.campaign;
@@ -112,6 +119,8 @@ export function createHud(root, game, { camera = null } = {}) {
     if ((k === 'reach' || k === 'destroy') && cp.of > 1) banner(`${cp.goal.label}${k === 'destroy' ? ' 破壞' : ''} <em>${e.n} / ${e.of}</em>`, `${e.n} of ${e.of}`, 110);
   });
   on('flood', () => banner('<em>水淹七軍</em>', 'The Han breaks its banks — the seven armies are swept away', 200));
+  on('base:captain', (e) => banner(`<em>據點兵長</em> 出現`, `The camp's captain comes out`, 110));
+  on('base:taken', (e) => banner(`敵軍據點 <em>制壓</em>${e.left ? ` · 殘 ${e.left}` : ''}`, e.left ? `Enemy camp taken — ${e.left} left` : 'Every enemy camp taken', 130));
   on('goal:done', (e) => { if (e.goal.kind !== 'officer') banner(`${goalText(e.goal)[0]} <em>達成</em>`, 'Objective complete', 140); });
   on('buff', () => banner('奪得 <em>青釭劍</em> · 攻擊力上昇', 'The Qinggang sword — attack up', 160));
   // supplies: what he just took, over his feet (food shows the HP it gave back)
@@ -322,6 +331,10 @@ export function createHud(root, game, { camera = null } = {}) {
         const g = cp.goal;
         if (g.kind === 'reach') g.points.forEach(([x, z], j) => { if (cp.caps[j] < 1) wt.push({ x, y: 3.4, z, label: g.label, spot: true }); });
         else if (g.kind === 'destroy') cp.tgt.forEach((t) => { if (t.hp > 0) wt.push({ x: t.x, y: 4.6, z: t.z, label: `${g.label} ${Math.ceil(t.hp / t.hpMax * 100)}%`, spot: true }); });
+        else if (g.kind === 'base') for (const id of g.ids) {
+          const b = game.bases.byId(id);
+          if (b?.side === 'foe') wt.push({ x: b.x, y: 9.5, z: b.z, label: b.captain >= 0 ? `${b.name} · 兵長` : `${b.name} · 守備 ${b.gauge}`, spot: Math.hypot(b.x - h.x, b.z - h.z) > 12 });
+        }
         else if (g.kind === 'officer') cp.ofs.forEach((i) => { if (!c.kod[i] && c.st[i] !== ST.OFF) wt.push({ x: c.x[i], y: 2.6, z: c.z[i], label: c.names[i - c.grunts][0] }); });
         else if (g.kind === 'boss' && game.boss?.alive()) wt.push({ x: game.boss.x, y: 3.2, z: game.boss.z, label: game.boss.def.zh });
       }
@@ -348,6 +361,21 @@ export function createHud(root, game, { camera = null } = {}) {
         text(w.b, t.label); text(w.sp, `${Math.round(dist)}m`);
         set(w.el, 'opacity', (0.55 + 0.45 * (0.5 + 0.5 * Math.sin(f * 0.1))).toFixed(2));
       });
+
+      // camp captains (據點兵長) within 30 m: a small tag with his health over the crest
+      let ck = 0;
+      if (camera && !inMusou) for (const b of game.bases.list) {
+        if (ck >= capTags.length || b.side !== 'foe' || b.captain < 0) continue;
+        const i = b.captain;
+        if (c.st[i] === ST.OFF || c.st[i] === ST.DEAD || Math.hypot(c.x[i] - h.x, c.z[i] - h.z) > 30) continue;
+        v3.set(c.x[i], c.y[i] + 2.3, c.z[i]).project(camera);
+        if (v3.z >= 1 || Math.abs(v3.x) > 0.95 || Math.abs(v3.y) > 0.9) continue;
+        const tg = capTags[ck++];
+        set(tg.el, 'opacity', '1');
+        set(tg.el, 'transform', `translate(${((v3.x + 1) / 2 * W).toFixed(1)}px, ${((1 - v3.y) / 2 * H).toFixed(1)}px)`);
+        set(tg.bar, 'transform', `scaleX(${clamp01(c.hp[i] / c.hpMax[i]).toFixed(3)})`);
+      }
+      for (; ck < capTags.length; ck++) set(capTags[ck].el, 'opacity', '0');
 
       // officer target bar (top left): last officer hit (10 s) or the nearest officer within 9 m
       let tg = S.tgt >= 0 && c.st[S.tgt] !== ST.OFF && (f - S.tgtF < 600 || f - S.tgtKoF < 70) ? S.tgt : -1;
@@ -452,7 +480,10 @@ export function createHud(root, game, { camera = null } = {}) {
 
       // minimap: 30 m around the hero, wall/gate up (camera yaw 0 looks at the wall, so map right = -X), 10 m grid,
       // units, view cone, reinforcement pings; officers off the map are pinned to its edge
-      const R = 30, s = 100 / R, X = (x) => 100 - (x - h.x) * s, Y = (z) => 100 - (z - h.z) * s;
+      const R = bigMap ? ARENA_RADIUS + 14 : Math.round(30 * Math.sqrt(ARENA_RADIUS / 46)), s = 100 / R;   // a bigger field, a wider map
+      const cx = bigMap ? 0 : h.x, cz = bigMap ? 0 : h.z, X = (x) => 100 - (x - cx) * s, Y = (z) => 100 - (z - cz) * s;
+      const hx = X(h.x), hy = Y(h.z);
+      map.setTransform(2, 0, 0, 2, 0, 0);                            // drawn in a 200 × 200 frame at twice the pixels
       map.clearRect(0, 0, 200, 200);
       map.fillStyle = 'rgba(18,12,9,0.66)'; map.fillRect(0, 0, 200, 200);
       map.fillStyle = 'rgba(214,184,130,0.08)';
@@ -482,10 +513,10 @@ export function createHud(root, game, { camera = null } = {}) {
         map.beginPath(); map.arc(X(w.x), Y(w.z), 5 + t * 22, 0, 7); map.stroke();
       }
       const cy = game.cam.yaw;
-      const cone = map.createRadialGradient(100, 100, 0, 100, 100, 70);
+      const cone = map.createRadialGradient(hx, hy, 0, hx, hy, 70);
       cone.addColorStop(0, 'rgba(200,240,255,0.3)'); cone.addColorStop(1, 'rgba(200,240,255,0)');
       map.fillStyle = cone;
-      map.beginPath(); map.moveTo(100, 100); map.arc(100, 100, 70, -Math.PI / 2 - cy - 0.5, -Math.PI / 2 - cy + 0.5); map.fill();
+      map.beginPath(); map.moveTo(hx, hy); map.arc(hx, hy, 70, -Math.PI / 2 - cy - 0.5, -Math.PI / 2 - cy + 0.5); map.fill();
       map.fillStyle = '#e0412c';
       for (let i = 0; i < c.grunts; i++) {
         const st = c.st[i];
@@ -515,14 +546,24 @@ export function createHud(root, game, { camera = null } = {}) {
           map.beginPath(); map.arc(pin(X(c.x[i])), pin(Y(c.z[i])), 9 + pulse * 4, 0, 7); map.stroke();
         }
       }
+      // camps: a square in the holder's colour (goal camps ringed above)
+      for (const b of game.bases.list) {
+        const bx = X(b.x), by = Y(b.z);
+        if (bx < -8 || bx > 208 || by < -8 || by > 208) continue;
+        const foe = b.side === 'foe', goal = cp?.goal?.kind === 'base' && cp.goal.ids.includes(b.id) && foe;
+        map.fillStyle = '#140c08'; map.fillRect(bx - 7, by - 7, 14, 14);
+        map.fillStyle = foe ? '#c8402a' : '#4a7ed8'; map.fillRect(bx - 5, by - 5, 10, 10);
+        map.fillStyle = '#140c08'; map.fillRect(bx - 1.5, by - 5, 3, 3);                 // the gate notch
+        if (goal) { map.strokeStyle = `rgba(255,214,90,${(0.45 + 0.4 * Math.sin(f * 0.12)).toFixed(2)})`; map.lineWidth = 2; map.strokeRect(bx - 10, by - 10, 20, 20); }
+      }
       if (cp?.ally) {
         const ax = Math.max(5, Math.min(195, X(cp.ally.x))), ay2 = Math.max(5, Math.min(195, Y(cp.ally.z)));
         map.fillStyle = '#081a2e'; map.fillRect(ax - 5, ay2 - 5, 10, 10); map.fillStyle = '#7ab8ff'; map.fillRect(ax - 3.5, ay2 - 3.5, 7, 7);
       }
       const ay = h.yaw;                                              // hero arrow
-      const px = (a, r) => 100 - Math.sin(a) * r, py = (a, r) => 100 - Math.cos(a) * r;
+      const px = (a, r) => hx - Math.sin(a) * r, py = (a, r) => hy - Math.cos(a) * r;
       map.fillStyle = 'rgba(8,30,38,0.85)';
-      map.beginPath(); map.arc(100, 100, 8, 0, 7); map.fill();
+      map.beginPath(); map.arc(hx, hy, 8, 0, 7); map.fill();
       map.fillStyle = '#9ff4ff';
       map.beginPath(); map.moveTo(px(ay, 9), py(ay, 9)); map.lineTo(px(ay + 2.5, 7), py(ay + 2.5, 7)); map.lineTo(px(ay - 2.5, 7), py(ay - 2.5, 7)); map.fill();
     },

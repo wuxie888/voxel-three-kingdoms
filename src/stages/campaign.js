@@ -13,6 +13,7 @@
 //   reach    points [[x, z]…], r: radius, hold: frames inside to take each one (0: arriving is enough), label.
 //   boss     the stage boss rides out (STAGE.boss); done when he falls.
 //   kos      n: KOs since the goal began.
+//   base     ids [id…] of STAGE.map.bases: take those camps (KO each camp's 據點兵長, stages/bases.js).
 //   destroy  points [[x, z]…], hp, r (m), label: structures he breaks with his blows (altars, dams; combat.strike →
 //            hitTargets); done when all of them fall. flood: true — when it is done the river breaks loose: a wall of
 //            water sweeps the field from the far bank (cp.flood), throwing every soldier it reaches.
@@ -24,10 +25,11 @@ import { STAGE } from './index.js';
 import { HERO } from '../heroes/index.js';
 import { emit } from '../core/events.js';
 import { ARENA_RADIUS, WALL_Z } from '../world/world.js';
+import { K } from '../world/field.js';
 
 const START = 210, GAP = 120, CLEAR = 170, ROAR = 34;    // frames: first goal after the intro, between goals, last goal → 勝利
 // the flood: starts `delay` frames after the dams fall, its front runs from z0 (the far bank) to z1 in `frames`
-export const FLOOD = { delay: 70, frames: 170, z0: 52, z1: -60 };
+export const FLOOD = { delay: 70, frames: Math.round(170 * K), z0: ARENA_RADIUS + 6, z1: -ARENA_RADIUS - 14 };
 // debug: ?goal=N starts at goal N (1-based); ?boss jumps to the boss goal
 const Q = new URLSearchParams(location.search);
 const SKIP = Number(Q.get('goal')) || (Q.has('boss') ? (STAGE.script || []).findIndex((g) => g.kind === 'boss') + 1 : 0);
@@ -79,6 +81,7 @@ export function createCampaign(game) {
     }
     else if (g.kind === 'boss') { cp.of = 1; game.boss?.summon(); }
     else if (g.kind === 'kos') cp.of = g.n;
+    else if (g.kind === 'base') cp.of = g.ids.length;
     for (const k of g.extra || []) {                            // officers riding with the goal (not needed to finish it)
       const a = game.cam.yaw + 0.5, x = h.x + Math.sin(a) * 18, z = h.z + Math.cos(a) * 18, r = Math.hypot(x, z), lim = ARENA_RADIUS - 5;
       c.spawnOfficer(k, r > lim ? x * lim / r : x, Math.min(r > lim ? z * lim / r : z, WALL_Z - 6), { hpK: g.hp || 1, escort: 10 });
@@ -109,6 +112,7 @@ export function createCampaign(game) {
     if (g.kind === 'boss') return game.boss && game.boss.st === 'dead' ? 1 : 0;
     if (g.kind === 'kos') return Math.min(g.n, h.kos - cp.kos0);
     if (g.kind === 'destroy') return cp.tgt.reduce((n, t) => n + (t.hp <= 0 ? 1 : 0), 0);
+    if (g.kind === 'base') return g.ids.filter((id) => game.bases.byId(id)?.side !== 'foe').length;
     // reach: each spot fills while he stands in it (drains at half speed when he leaves)
     let n = 0;
     g.points.forEach(([x, z], j) => {
@@ -143,7 +147,7 @@ export function createCampaign(game) {
     if (u > 1) return;
     const front = FLOOD.z0 + (FLOOD.z1 - FLOOD.z0) * u;
     F.front = front;
-    game.combat.strike({ shape: 'line', len: 140, width: 5, dmg: 999, kb: 'blow', force: 10, lift: 5, heavy: true, yMax: 9 }, -70, front, Math.PI / 2, 8e7, false, 'flood');
+    game.combat.strike({ shape: 'line', len: 2 * ARENA_RADIUS + 50, width: 5, dmg: 999, kb: 'blow', force: 10, lift: 5, heavy: true, yMax: 9 }, -ARENA_RADIUS - 25, front, Math.PI / 2, 8e7, false, 'flood');
   }
 
   function stepAlly() {

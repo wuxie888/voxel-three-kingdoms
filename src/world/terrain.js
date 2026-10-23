@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { makeRng, hash01 } from '../core/rng.js';
 import { hazeColor, SUN_DIR, SUN_AZ } from './sky.js';
+import { RIM, K } from './field.js';
 
 // smooth 2D value noise from the stable hash (no RNG state)
 function vnoise(x, z, seed) {
@@ -68,7 +69,7 @@ function ground(gateX, scorch) {
   const tex = groundTexture();
   const out = new THREE.Group();
   // inner detailed plane: vertex colours = broad dust patches
-  const size = 220, seg = 176;
+  const size = 220 + 2 * RIM, seg = Math.round(176 * (220 + 2 * RIM) / 220);
   const geo = new THREE.PlaneGeometry(size, size, seg, seg);
   geo.rotateX(-Math.PI / 2);
   const p = geo.attributes.position, col = new Float32Array(p.count * 3);
@@ -78,7 +79,7 @@ function ground(gateX, scorch) {
     let k = 1.04 + (dust - 0.5) * 0.85;                                        // broad dust drifts vs darker trampled earth
     k *= 1 - 0.28 * paveMask(x, z, gateX);                                     // dark joints under the paving; bare-dust breaks stay pale
     for (const [sx, , sz, ss] of scorch) k *= 1 - 0.5 * Math.exp(-((x - sx) ** 2 + (z - sz) ** 2) / (9 * ss * ss));   // scorched earth                        // gaps between raised cobbles read dark
-    const edge = Math.min(1, Math.max(0, (Math.hypot(x, z) - 80) / 30));    // fade to the outer plane's tone
+    const edge = Math.min(1, Math.max(0, (Math.hypot(x, z) - 80 - RIM) / 30));    // fade to the outer plane's tone
     k = k * (1 - edge) + 0.98 * edge;
     col[i * 3] = k * 1.03; col[i * 3 + 1] = k; col[i * 3 + 2] = k * 0.96;
   }
@@ -167,8 +168,8 @@ function cobbles(gateX) {
 function rubble(gateX) {
   const r = makeRng(17), list = [];
   const COLS = [0x7a6a60, 0x6c5d56, 0x857266, 0x5f5049, 0x8c7a6c, 0x3a2a22];
-  for (let k = 0; k < 90; k++) {
-    const a = r.range(0, Math.PI * 2), d = r.range(7, 50), cx = Math.sin(a) * d, cz = Math.cos(a) * d;
+  for (let k = 0; k < Math.round(90 * K * K); k++) {
+    const a = r.range(0, Math.PI * 2), d = r.range(7, 50) * K, cx = Math.sin(a) * d, cz = Math.cos(a) * d;
     if (cz > 30 && Math.abs(cx - gateX) < 5) continue;                       // keep the gate road clean
     const n = r.int(3, 10), spread = r.range(0.6, 1.6);
     for (let i = 0; i < n; i++) {
@@ -256,6 +257,6 @@ function mountains() {
 
 export function buildTerrain(scene, gateX, fieldFires) {
   const r = makeRng(61), scorch = [...fieldFires];
-  for (let i = 0; i < 10; i++) { const a = r.range(0, 6.28), d = r.range(14, 42); scorch.push([Math.sin(a) * d, 0, Math.cos(a) * d, r.range(0.5, 0.9)]); }
+  for (let i = 0; i < Math.round(10 * K * K); i++) { const a = r.range(0, 6.28), d = r.range(14, 42) * K; scorch.push([Math.sin(a) * d, 0, Math.cos(a) * d, r.range(0.5, 0.9)]); }
   scene.add(ground(gateX, scorch), cobbles(gateX), rubble(gateX), mountains());
 }

@@ -24,7 +24,8 @@ export const ITEMS = {
   chest: { zh: '寶箱', fx: '裝備', en: 'TREASURE · EQUIPMENT', chest: true },
 };
 export const BUFF = 60 * 25;
-const JARS = 16, LIFE = 60 * 30, R = 1.25, MAX = 18, EVERY = 80;
+const LIFE = 60 * 30, R = 1.25, MAX = 24, EVERY = 80;
+const JARS = Math.round(16 * Math.max(1, (ARENA_RADIUS / 46) ** 2 * 0.7));   // more of them on a bigger field
 // jar loot: the rest of the roll is an empty jar
 const LOOT = [['bun', 0.32], ['wine', 0.2], ['tiger', 0.12], ['armor', 0.12], ['feast', 0.07], ['chest', 0.06]];
 const seed = [...STAGE.id].reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) % 9973;
@@ -60,6 +61,7 @@ export function createSupplies(game) {
     } else if (++gruntKOs % EVERY === 0) drop('bun', e.x, e.z);
   });
   on('boss:defeat', (e) => { drop('feast', e.x, e.z); drop('chest', e.x + 1.4, e.z, { luck: 1.5 + luck(), floor: 3 }); });
+  on('base:taken', (e) => { drop(e.k % 2 ? 'wine' : 'feast', e.x, e.z); if (e.k % 3 === 0) drop('chest', e.x + 1.4, e.z, { luck: luck() }); });   // the camp's stores
   on('scenario', () => { s.items.length = 0; gruntKOs = 0; koN = 0; for (const j of s.jars) j.alive = true; });
 
   /** combat.strike: a hit window covers jar j when inside(x, z) — the jar breaks and spills its item. */
