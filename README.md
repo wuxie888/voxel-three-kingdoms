@@ -6,9 +6,9 @@
 
 无需构建：纯 ES 模块，Three.js r186 已内置于 `vendor/three/`，逻辑以固定 60 Hz 确定性步进运行。
 
-*A browser-playable voxel hack-and-slash set in the Three Kingdoms. Five officers, three battles, hundreds of soldiers. Plain ES modules, no build step.*
+*A browser-playable voxel hack-and-slash set in the Three Kingdoms. Five officers, five battles, a story mode, archers, shield walls, cavalry and war horses, hundreds of soldiers. Plain ES modules, no build step.*
 
-**在线试玩 Play：<https://voxel-three-kingdoms.vercel.app>** · 作者 Author：[@sciencedegens](https://x.com/sciencedegens)
+**官网 Site：<https://voxel-three-kingdoms.vercel.app>** · **直接开玩 Play：<https://voxel-three-kingdoms.vercel.app/play/>** · 作者 Author：[@sciencedegens](https://x.com/sciencedegens)
 
 ## 武将
 
@@ -45,6 +45,20 @@
 - 敌将会正面格挡轻攻击，被挡时有金属声和火花；蓄力、重击和无双可以破防，连续格挡三次也会被打破。
 - 敌将被连招锁住、受到的伤害到一定比例时，会霸体挣脱并立刻反击，所以连招要留空间，或者先闪避。
 - 吕布有架势条：被打出硬直时是输出窗口，起身后 2.5 秒内不会再硬直。
+
+### 兵种
+
+敌军不再只有一种杂兵：
+- **弓兵**（背着箭袋）：在 10–15 米外放箭，你一靠近就后退。拉弓时箭头会发白光，放箭前一刻变红。箭只扣血，不会打断你的动作。翻滚可以躲开，迎面挥砍能把箭斩落。
+- **大盾兵**（举着高大的方盾）：正面挡住普通攻击，连续挨到第三下才会破防。蓄力攻击、无双、从侧面或背后打都能直接命中。营寨的守军前排就是盾墙，后面站着弓兵。
+- **骑兵**：成队冲锋，从你身上踏过去会把你撞飞，然后兜回来再冲。普通攻击只能扣血，把他打下马要用蓄力攻击、跳跃攻击或无双。落马的骑兵会下马步战，留下的空马可以骑。每隔一段时间会有一队骑兵从敌营或远处杀来（长坂坡是曹操的虎豹骑，来得最频繁；黄巾军没有骑兵）。
+
+### 战马
+
+- 按 **U**（手柄 L1，触屏「馬」键）召唤自己的战马。马从镜头后方跑来，到你身边时自动上马。赵云骑白马，关羽、吕布骑赤兔，张飞骑黑马。
+- 骑马时速度可达 15 米/秒，正面冲进步兵堆会把他们撞翻。马上按 J 连续挥砍，按 K 是大范围的终结横扫。
+- 被弓箭或杂兵打中只扣血；被敌将、吕布或敌方骑兵重击会摔下马。放无双时会自动下马。
+- 再按一次 U 下马，马会留在原地等你。靠近敌人留下的空马按 U，也能直接骑上去。
 
 ### 补给
 
@@ -132,7 +146,7 @@ python3 -m http.server 8000
 
 ### 部署
 
-线上版本用的是打包版：`npm i` 之后运行 `npm run build`，把整个游戏打包成一个压缩并带内容哈希的 `game-<hash>.js`，加上 `index.html` 和资源文件，输出为 Vercel 的 prebuilt 格式（`.vercel/output`）。`npm run deploy` 会先打包，再执行 `vercel deploy --prebuilt --prod`。源码目录不经打包也能直接运行。
+线上版本用的是打包版：`npm i` 之后运行 `npm run build`，把整个游戏打包成一个压缩并带内容哈希的 `game-<hash>.js`，加上 `index.html` 和资源文件放在 `/play/` 下；网站根目录是官网（`site/`：首页、截图、宣传短片、标题字体），输出为 Vercel 的 prebuilt 格式（`.vercel/output`）。旧链接 `/?stage=…&hero=…` 会自动跳到 `/play/`。`npm run deploy` 会先打包，再执行 `vercel deploy --prebuilt --prod`。源码目录不经打包也能直接运行（本地开发时游戏就在根目录）。
 
 ## 操作
 
@@ -145,13 +159,14 @@ python3 -m http.server 8000
 | 跳跃 | 空格 |
 | 闪避 | L / Shift |
 | 无双（金色槽满时） | I |
+| 召唤战马 / 上马 / 下马 | U |
 | 旋转镜头 | Q E / 鼠标拖动 |
 | 暂停 | Esc |
 | 标题页选将 / 选战场 | ← → / ↑ ↓ |
 
 也支持手柄。
 
-**触屏**：左半屏任意位置按下就是摇杆；右下角是「攻、蓄、跳、閃、無雙」五个键，无双槽满时「無雙」键会亮起；右半屏空白处滑动转动视角；左上角是暂停键。竖屏时会提示把手机横过来。
+**触屏**：左半屏任意位置按下就是摇杆；右下角是「攻、蓄、跳、閃、無雙」五个键，无双槽满时「無雙」键会亮起，上方的「馬」键召唤或上下战马；右半屏空白处滑动转动视角；左上角是暂停键。竖屏时会提示把手机横过来。
 
 ## URL 参数
 
@@ -179,9 +194,11 @@ index.html      入口、importmap、HUD 与标题页样式
 src/heroes/     每名武将一个文件：模型、兵器、弹簧链、头像、台词、战斗风格
 src/stages/     战场配置：天空、光照、敌军、台词、布景、Boss、目标脚本（campaign.js）与目标道具（props.js）
 src/boss/       Boss 模拟与表现（虎牢关 三英戰呂布）
+src/horse/      战马：体素模型与步态（model.js）、空马与召唤（horses.js）；骑乘逻辑在 src/hero/mount.js
 src/            core、hero、combat、crowd、musou、camera、vfx、post、world、audio、ui
 vendor/three/   Three.js r186
-tools/          build.mjs（部署打包）、record/（宣传片录制）、tape/（链上包）
+site/           官网：index.html、img/（截图与立绘）、media/（宣传短片）、fonts/（标题书法字体 Yuji Boku 子集，OFL）
+tools/          build.mjs（部署打包：官网 + /play/ 游戏）、record/（宣传片录制）、tape/（链上包）
 ```
 
 新增武将：在 `src/heroes/` 仿照现有文件写一个定义（`build()` 返回各关节的体素块，`chains()` 返回飘动部件），再加进 `src/heroes/index.js`。自己的招式写在 `*.moves.js`：`moves()` 招式表、`clips(A, M)` 用 `src/hero/anims/author.js` 逐帧写动作、`musou` 无双脚本。
@@ -191,6 +208,6 @@ tools/          build.mjs（部署打包）、record/（宣传片录制）、tap
 - 基于 BubuAi 的 [Voxel Musou](https://github.com/mike007jd/voxel-musou)（MIT）。战斗、人群 AI、镜头、特效、后处理和音频系统都来自原作。
 - 代码：MIT 许可，见 [LICENSE](LICENSE)。
 - [three.js](https://threejs.org/)：MIT 许可。
-- HUD 备用字体 `src/ui/brush.woff2` 是 Yuji Boku（Kinuta Font Factory）的子集，采用 SIL Open Font License 1.1 授权。
+- HUD 备用字体 `src/ui/brush.woff2` 和官网标题字体 `site/fonts/brush.woff2` 都是 Yuji Boku（Kinuta Font Factory）的子集，采用 SIL Open Font License 1.1 授权。
 
 本项目为同人作品，与 KOEI TECMO 无关，也未获其认可。“真·三国无双 / Dynasty Warriors” 是 KOEI TECMO 的商标。本项目不包含任何原作游戏素材。

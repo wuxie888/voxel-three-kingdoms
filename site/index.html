@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>體素三國 · Voxel Three Kingdoms — 一騎當千，瀏覽器即玩</title>
+<script>
+  // old links went straight to the game (/?stage=…&hero=…): they still do
+  if (/[?&](stage|hero|story|q|touch|rec|boss|goal|debug|enemies)=?/.test(location.search)) location.replace('/play/' + location.search + location.hash);
+</script>
+<meta name="description" content="體素三國：瀏覽器即玩的三國無雙割草動作遊戲。趙雲、關羽、張飛、諸葛亮、呂布，五場名戰、劇情演義、兵種與戰馬，一人獨闖千軍。免下載，電腦、手機都能玩。">
+<link rel="icon" href="/icon.png">
+<link rel="apple-touch-icon" href="/icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="體素三國">
+<meta property="og:title" content="體素三國 · Voxel Three Kingdoms">
+<meta property="og:description" content="一騎當千，瀏覽器即玩。五位武將、五場名戰、劇情演義、兵種與戰馬——免下載的體素三國割草動作遊戲。">
+<meta property="og:url" content="https://voxel-three-kingdoms.vercel.app/">
+<meta property="og:image" content="https://voxel-three-kingdoms.vercel.app/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@sciencedegens">
+<meta name="twitter:title" content="體素三國 · Voxel Three Kingdoms">
+<meta name="twitter:description" content="一騎當千，瀏覽器即玩。五位武將、五場名戰、劇情演義、兵種與戰馬。">
+<meta name="twitter:image" content="https://voxel-three-kingdoms.vercel.app/og.jpg">
+<meta name="theme-color" content="#120c09">
+<style>
+  @font-face { font-family: "HudBrush"; src: url(/fonts/brush.woff2) format("woff2"); font-display: swap; }   /* Yuji Boku (OFL), subset to the headings */
+  :root {
+    --ink: #120c09; --ink2: #1c130e; --ink3: #261a13; --paper: #efe3cf; --dim: #b9a88d; --gold: #f2c14e; --gold2: #c8963a;
+    --red: #b8301e; --red2: #8a1f12;
+    --brush: "HudBrush", "Xingkai SC", "STXingkai", "Kaiti SC", "STKaiti", "KaiTi", "BiauKai", serif;
+    --kai: "Kaiti SC", "STKaiti", "KaiTi", "BiauKai", "Songti SC", serif;
+    --sans: "Avenir Next", "Helvetica Neue", "PingFang TC", "PingFang SC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--ink); color: var(--paper); font: 400 17px/1.75 var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  img, video { display: block; max-width: 100%; }
+  .wrap { width: min(1180px, 92vw); margin: 0 auto; }
+  .seal { display: inline-grid; place-items: center; writing-mode: vertical-rl; font: 700 1em/1 var(--brush); color: #fff3e0;
+    background: var(--red); border: .08em solid #e9c48a; padding: .25em .18em; letter-spacing: .05em; box-shadow: 0 0 0 .06em var(--red2); }
+  .btn { display: inline-flex; align-items: baseline; gap: .7em; padding: .7em 1.5em .65em; border: 2px solid var(--gold2); color: var(--gold);
+    font: 700 1.5rem/1 var(--brush); letter-spacing: .1em; background: rgba(18,12,9,.55); transition: background .2s, color .2s, transform .2s; }
+  .btn small { font: 700 .72rem/1 var(--sans); letter-spacing: .22em; opacity: .85; }
+  .btn:hover { background: rgba(242,193,78,.14); transform: translateY(-1px); }
+  .btn.main { background: linear-gradient(#f7d77c, #d9a23c); color: #2a1408; border-color: #ffe7a6; box-shadow: 0 6px 28px rgba(242,193,78,.28); }
+  .btn.main:hover { background: linear-gradient(#ffe39a, #e8b04a); }
+
+  /* ---- nav */
+  nav { position: fixed; inset: 0 0 auto; z-index: 10; background: linear-gradient(rgba(18,12,9,.8), rgba(18,12,9,0)); transition: background .3s, backdrop-filter .3s; }
+  nav.solid { background: rgba(18,12,9,.86); backdrop-filter: blur(8px); box-shadow: 0 1px 0 rgba(239,227,207,.08); }
+  nav .wrap { display: flex; align-items: center; gap: 1.6rem; height: 64px; }
+  nav .logo { display: flex; align-items: center; gap: .55rem; font: 700 1.6rem/1 var(--brush); letter-spacing: .08em; }
+  nav .logo .seal { font-size: .62rem; }
+  nav .links { display: flex; gap: 1.4rem; margin-left: auto; font-size: .95rem; color: #d8c8ae; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
+  nav .links a:hover { color: var(--gold); }
+  nav .play { padding: .45em 1.1em .4em; font-size: 1.1rem; }
+  nav .soc { display: flex; gap: .7rem; }
+  nav .soc a { width: 22px; height: 22px; opacity: .75; } nav .soc a:hover { opacity: 1; }
+  nav svg { width: 100%; height: 100%; fill: currentColor; }
+  @media (max-width: 860px) { nav .links { display: none; } nav .soc { margin-left: auto; } }
+
+  /* ---- hero */
+  .hero { position: relative; min-height: 100svh; display: grid; align-items: center; overflow: hidden; }
+  .hero video, .hero .poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .hero::after { content: ""; position: absolute; inset: 0; background:
+      linear-gradient(90deg, rgba(18,12,9,.92) 0%, rgba(18,12,9,.55) 45%, rgba(18,12,9,.1) 75%),
+      linear-gradient(0deg, var(--ink) 0%, rgba(18,12,9,0) 30%); }
+  .hero .wrap { position: relative; z-index: 1; padding: 120px 0 90px; }
+  .hero h1 { margin: 0; display: flex; align-items: flex-start; gap: 1.2rem; font: 700 clamp(4rem, 11vw, 8.6rem)/1 var(--brush); letter-spacing: .12em;
+    text-shadow: 0 4px 30px rgba(0,0,0,.6); }
+  .hero h1 .seal { font-size: .26em; margin-top: .2em; }
+  .hero .en { font: 600 clamp(.8rem, 1.6vw, 1.15rem)/1 var(--sans); letter-spacing: .62em; color: var(--dim); margin: .9rem 0 2.2rem .2rem; }
+  .hero .tag { font: 700 clamp(1.6rem, 3.4vw, 2.5rem)/1.3 var(--kai); margin: 0; }
+  .hero .tag em { font-style: normal; color: var(--gold); }
+  .hero .tag-en { color: var(--dim); margin: .4rem 0 2.2rem; font-size: 1.05rem; }
+  .hero .cta { display: flex; flex-wrap: wrap; gap: 1rem; }
+  .hero .note { margin-top: 1.4rem; font-size: .9rem; color: var(--dim); letter-spacing: .05em; }
+  .hero .note b { color: var(--paper); font-weight: 600; }
+  @media (max-width: 620px) { .hero .en { letter-spacing: .3em; } .hero h1 { gap: .7rem; } }
+
+  /* ---- stats */
+  .stats { border-block: 1px solid rgba(239,227,207,.08); background: var(--ink2); }
+  .stats .wrap { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .stats div { padding: 1.6rem 1rem; text-align: center; border-left: 1px solid rgba(239,227,207,.06); }
+  .stats div:first-child { border-left: 0; }
+  .stats b { display: block; font: 700 2.6rem/1.1 var(--brush); color: var(--gold); }
+  .stats span { font-size: .9rem; color: var(--dim); }
+  .stats small { display: block; font-size: .68rem; letter-spacing: .2em; opacity: .7; }
+  @media (max-width: 700px) { .stats .wrap { grid-template-columns: repeat(2, 1fr); } .stats div:nth-child(3) { border-left: 0; } }
+
+  /* ---- sections */
+  section { padding: 110px 0 40px; }
+  .head { display: flex; align-items: baseline; gap: 1.2rem; margin-bottom: 2.4rem; }
+  .head h2 { margin: 0; font: 700 clamp(2.4rem, 5vw, 3.6rem)/1 var(--brush); letter-spacing: .1em; }
+  .head small { font: 600 .8rem/1 var(--sans); letter-spacing: .4em; color: var(--red); text-transform: uppercase; }
+  .head p { margin: 0 0 0 auto; color: var(--dim); max-width: 32em; font-size: .95rem; }
+  @media (max-width: 860px) { .head { flex-wrap: wrap; } .head p { margin: 0; } }
+
+  .feats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.4rem; }
+  .feat { background: var(--ink2); border: 1px solid rgba(239,227,207,.07); overflow: hidden; transition: transform .25s, border-color .25s; }
+  .feat:hover { transform: translateY(-3px); border-color: rgba(242,193,78,.35); }
+  .feat .pic { aspect-ratio: 16/9; background: var(--ink3); overflow: hidden; }
+  .feat .pic img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s; }
+  .feat:hover .pic img { transform: scale(1.04); }
+  .feat .txt { padding: 1.1rem 1.3rem 1.4rem; }
+  .feat h3 { margin: 0 0 .1rem; font: 700 1.7rem/1.2 var(--brush); letter-spacing: .08em; }
+  .feat h3 small { font: 600 .66rem/1 var(--sans); letter-spacing: .25em; color: var(--gold2); margin-left: .6rem; vertical-align: middle; }
+  .feat p { margin: .4rem 0 0; color: var(--dim); font-size: .95rem; line-height: 1.7; }
+  @media (max-width: 960px) { .feats { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 620px) { .feats { grid-template-columns: 1fr; } }
+
+  .heroes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
+  .hc { position: relative; background: radial-gradient(120% 80% at 50% 20%, #3a2618, var(--ink2) 70%); border: 1px solid rgba(239,227,207,.08); overflow: hidden; }
+  .hc img { width: 100%; aspect-ratio: 3/4; object-fit: cover; object-position: 50% 20%; transition: transform .6s; }
+  .hc:hover img { transform: scale(1.05); }
+  .hc .t { position: absolute; inset: auto 0 0; padding: 2.6rem .9rem .9rem; background: linear-gradient(0deg, rgba(18,12,9,.96) 35%, rgba(18,12,9,0)); }
+  .hc h3 { margin: 0; display: flex; align-items: center; gap: .5rem; font: 700 2rem/1 var(--brush); letter-spacing: .1em; }
+  .hc h3 .seal { font-size: .32em; }
+  .hc .w { margin: .4rem 0 .1rem; font: 600 .82rem/1.3 var(--sans); color: var(--gold); letter-spacing: .1em; }
+  .hc .q { margin: 0; font: 500 .86rem/1.45 var(--kai); color: var(--dim); }
+  @media (max-width: 960px) { .heroes { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 620px) { .heroes { grid-template-columns: repeat(2, 1fr); } }
+
+  .battles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1rem; }
+  .bc { grid-column: span 2; position: relative; overflow: hidden; border: 1px solid rgba(239,227,207,.08); background: var(--ink3); }
+  .bc:nth-child(4), .bc:nth-child(5) { grid-column: span 3; }
+  .bc img { width: 100%; aspect-ratio: 16/9; object-fit: cover; transition: transform .6s; }
+  .bc:hover img { transform: scale(1.04); }
+  .bc .t { position: absolute; inset: auto 0 0; padding: 2.4rem 1.1rem 1rem; background: linear-gradient(0deg, rgba(18,12,9,.95) 30%, rgba(18,12,9,0)); }
+  .bc h3 { margin: 0; font: 700 1.9rem/1 var(--brush); letter-spacing: .1em; }
+  .bc h3 small { font: 600 .7rem/1 var(--sans); letter-spacing: .2em; color: var(--gold2); margin-left: .6rem; }
+  .bc p { margin: .45rem 0 0; font-size: .9rem; color: var(--dim); line-height: 1.6; }
+  @media (max-width: 860px) { .battles { grid-template-columns: 1fr; } .bc, .bc:nth-child(4), .bc:nth-child(5) { grid-column: auto; } }
+
+  .story { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin-top: 1rem; }
+  .story::before { content: ""; position: absolute; left: 0; right: 0; top: 18px; height: 2px; background: linear-gradient(90deg, transparent, var(--gold2), var(--gold2), transparent); opacity: .5; }
+  .ch { position: relative; padding: 46px 1rem 0; text-align: center; }
+  .ch::before { content: ""; position: absolute; top: 10px; left: 50%; width: 18px; height: 18px; margin-left: -9px; transform: rotate(45deg); background: var(--red); border: 2px solid var(--gold); }
+  .ch .y { font-size: .78rem; color: var(--gold2); letter-spacing: .12em; }
+  .ch h3 { margin: .2rem 0 .3rem; font: 700 1.8rem/1.15 var(--brush); letter-spacing: .08em; }
+  .ch .n { font: 700 .9rem/1 var(--kai); color: var(--dim); }
+  .ch p { margin: .5rem 0 0; font: 500 .9rem/1.6 var(--kai); color: var(--dim); }
+  .story-cta { text-align: center; margin-top: 2.6rem; }
+  @media (max-width: 860px) { .story { grid-template-columns: 1fr; } .story::before { left: 18px; right: auto; top: 0; bottom: 0; width: 2px; height: auto; background: linear-gradient(180deg, transparent, var(--gold2), transparent); }
+    .ch { text-align: left; padding: 0 0 1.6rem 52px; } .ch::before { left: 18px; top: 8px; } }
+
+  .news { display: grid; gap: .1rem; max-width: 900px; }
+  .nw { display: grid; grid-template-columns: 8.5rem 1fr; gap: 1.4rem; padding: 1.1rem 0; border-bottom: 1px solid rgba(239,227,207,.08); }
+  .nw time { font: 600 .85rem/1.9 var(--sans); color: var(--gold2); letter-spacing: .08em; }
+  .nw h3 { margin: 0; font: 700 1.25rem/1.5 var(--kai); }
+  .nw p { margin: .2rem 0 0; color: var(--dim); font-size: .93rem; }
+  @media (max-width: 620px) { .nw { grid-template-columns: 1fr; gap: .1rem; } }
+
+  .join { margin-top: 110px; padding: 90px 0; text-align: center; background:
+      radial-gradient(60% 120% at 50% 100%, rgba(184,48,30,.28), transparent 70%), var(--ink2); border-top: 1px solid rgba(239,227,207,.07); }
+  .join h2 { margin: 0; font: 700 clamp(2.6rem, 6vw, 4.4rem)/1.1 var(--brush); letter-spacing: .12em; }
+  .join p { color: var(--dim); margin: .8rem 0 2.2rem; }
+  .join .cta { display: flex; justify-content: center; flex-wrap: wrap; gap: 1rem; }
+  .join .soc { display: inline-flex; align-items: center; gap: .6rem; padding: .8em 1.4em; border: 1px solid rgba(239,227,207,.25); font-size: 1rem; }
+  .join .soc:hover { border-color: var(--gold); color: var(--gold); }
+  .join .soc svg { width: 20px; height: 20px; fill: currentColor; }
+  footer { padding: 2.4rem 0 3rem; font-size: .82rem; color: #8a7a64; text-align: center; line-height: 2; }
+  footer a { color: var(--dim); border-bottom: 1px solid rgba(185,168,141,.3); }
+
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<nav id="nav"><div class="wrap">
+  <a class="logo" href="#top">體素三國 <span class="seal">群英</span></a>
+  <div class="links"><a href="#features">遊戲特色</a><a href="#heroes">武將</a><a href="#battles">戰役</a><a href="#story">劇情</a><a href="#news">戰報</a></div>
+  <div class="soc">
+    <a href="https://x.com/sciencedegens" target="_blank" rel="noopener" title="X / Twitter"><svg viewBox="0 0 24 24"><path d="M18.9 1.2h3.7l-8 9.2 9.4 12.4h-7.4l-5.8-7.6-6.6 7.6H.5l8.6-9.8L0 1.2h7.6l5.2 6.9zm-1.3 19.4h2L6.5 3.3H4.3z"/></svg></a>
+    <a href="https://github.com/wuxie888/voxel-three-kingdoms" target="_blank" rel="noopener" title="GitHub"><svg viewBox="0 0 24 24"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg></a>
+  </div>
+  <a class="btn main play" href="/play/">出陣</a>
+</div></nav>
+
+<header class="hero" id="top">
+  <img class="poster" src="/img/hero.jpg" alt="" fetchpriority="high">
+  <video autoplay muted loop playsinline preload="auto" poster="/img/hero.jpg">
+    <source src="/media/trailer.mp4" type="video/mp4">
+  </video>
+  <div class="wrap">
+    <h1>體素三國 <span class="seal">群英</span></h1>
+    <div class="en">VOXEL THREE KINGDOMS</div>
+    <p class="tag">一騎當千，<em>瀏覽器即玩</em></p>
+    <p class="tag-en">One hero against a thousand — free, right in your browser.</p>
+    <div class="cta">
+      <a class="btn main" href="/play/">立即出陣<small>PLAY NOW</small></a>
+      <a class="btn" href="/play/?story=c1&amp;stage=huangjin&amp;hero=guanyu">劇情模式<small>STORY</small></a>
+    </div>
+    <div class="note"><b>免下載</b> · 電腦、手機、平板 · 支援手柄 &nbsp;/&nbsp; No download · desktop, phone, tablet · gamepad</div>
+  </div>
+</header>
+
+<div class="stats"><div class="wrap">
+  <div><b>5</b><span>位武將</span><small>HEROES</small></div>
+  <div><b>5</b><span>場名戰</span><small>BATTLES</small></div>
+  <div><b>300</b><span>同屏敵軍</span><small>ON SCREEN</small></div>
+  <div><b>0.5<small style="display:inline;font-size:1rem;letter-spacing:0"> MB</small></b><span>即開即玩</span><small>TO LOAD</small></div>
+</div></div>
+
+<section id="features"><div class="wrap">
+  <div class="head reveal"><h2>遊戲特色</h2><small>Features</small><p>真三國無雙式的割草動作，做成了打開網頁就能玩的體素遊戲。</p></div>
+  <div class="feats">
+    <article class="feat reveal"><div class="pic"><img src="/img/f-musou.webp" alt="無雙亂舞" loading="lazy"></div><div class="txt">
+      <h3>一騎當千<small>MUSOU</small></h3><p>數百敵軍同屏，連擊、蓄力、無雙亂舞，一刀掃倒一片。每位武將都有自己的招式與無雙。</p></div></article>
+    <article class="feat reveal"><div class="pic"><img src="/img/f-camps.webp" alt="據點攻防" loading="lazy"></div><div class="txt">
+      <h3>據點攻防<small>CAMPS</small></h3><p>戰場半徑近百米，五座敵營：打倒據點兵長、奪下營寨、截斷敵軍援兵。按 M 看全圖。</p></div></article>
+    <article class="feat reveal"><div class="pic"><img src="/img/f-arms.webp" alt="兵種與戰馬" loading="lazy"></div><div class="txt">
+      <h3>兵種與戰馬<small>ARMS &amp; HORSES</small></h3><p>弓兵放箭、大盾擋刀、騎兵衝陣。召喚自己的戰馬——趙雲的白馬、關羽的赤兔——衝進敵陣。</p></div></article>
+    <article class="feat reveal"><div class="pic"><img src="/img/f-story.webp" alt="蜀漢演義" loading="lazy"></div><div class="txt">
+      <h3>蜀漢演義<small>STORY</small></h3><p>從桃園結義到水淹七軍，五章劇情串起五場名戰，戰前戰後都有劇情。</p></div></article>
+    <article class="feat reveal"><div class="pic"><img src="/img/f-gear.webp" alt="裝備成長" loading="lazy"></div><div class="txt">
+      <h3>裝備成長<small>GEAR</small></h3><p>武器帶炎、冰、雷、斬、吸屬性，寶箱掉落寶物，武將升級，越打越強。</p></div></article>
+    <article class="feat reveal"><div class="pic"><img src="/img/f-mobile.webp" alt="手機也能玩" loading="lazy"></div><div class="txt">
+      <h3>隨開隨玩<small>ANYWHERE</small></h3><p>整個遊戲只有 0.5 MB、免安裝；觸控操作、自動畫質，手機橫過來也能割草。</p></div></article>
+  </div>
+</div></section>
+
+<section id="heroes"><div class="wrap">
+  <div class="head reveal"><h2>武將</h2><small>Heroes</small><p>五位名將，各有兵器、招式與無雙。</p></div>
+  <div class="heroes">
+    <a class="hc reveal" href="/play/?hero=zhaoyun"><img src="/img/h-zhaoyun.webp" alt="趙雲" loading="lazy"><div class="t"><h3>趙雲 <span class="seal">常山</span></h3><div class="w">龍膽亮銀槍 · 槍術迅捷</div><p class="q">一杆長槍，獨闖魏軍三百</p></div></a>
+    <a class="hc reveal" href="/play/?hero=guanyu"><img src="/img/h-guanyu.webp" alt="關羽" loading="lazy"><div class="t"><h3>關羽 <span class="seal">河東</span></h3><div class="w">青龍偃月刀 · 重刀剛猛</div><p class="q">青龍偃月，萬軍之中取上將首級</p></div></a>
+    <a class="hc reveal" href="/play/?hero=zhangfei"><img src="/img/h-zhangfei.webp" alt="張飛" loading="lazy"><div class="t"><h3>張飛 <span class="seal">燕人</span></h3><div class="w">丈八蛇矛 · 蠻力怒吼</div><p class="q">當陽橋頭，一聲喝退百萬兵</p></div></a>
+    <a class="hc reveal" href="/play/?hero=zhugeliang"><img src="/img/h-zhugeliang.webp" alt="諸葛亮" loading="lazy"><div class="t"><h3>諸葛亮 <span class="seal">臥龍</span></h3><div class="w">白羽扇 · 羽扇遠程</div><p class="q">羽扇綸巾，運籌帷幄之中</p></div></a>
+    <a class="hc reveal" href="/play/?hero=lubu"><img src="/img/h-lubu.webp" alt="呂布" loading="lazy"><div class="t"><h3>呂布 <span class="seal">五原</span></h3><div class="w">方天畫戟 · 無雙霸體</div><p class="q">人中呂布，一戟橫掃千軍</p></div></a>
+  </div>
+</div></section>
+
+<section id="battles"><div class="wrap">
+  <div class="head reveal"><h2>戰役</h2><small>Battles</small><p>每場七、八個目標：斬敵將、破營寨、救阿斗、燒戰船、掘堤壩。</p></div>
+  <div class="battles">
+    <a class="bc reveal" href="/play/?stage=huangjin"><img src="/img/b-huangjin.webp" alt="黃巾之亂" loading="lazy"><div class="t"><h3>黃巾之亂<small>清晨 · 黃巾軍</small></h3><p>「蒼天已死，黃天當立」——砸毀黃巾祭壇，討伐天公將軍張角。</p></div></a>
+    <a class="bc reveal" href="/play/?stage=hulao"><img src="/img/b-hulao.webp" alt="虎牢關" loading="lazy"><div class="t"><h3>虎牢關<small>白晝 · 董卓軍</small></h3><p>斬華雄，破李傕、郭汜，三英戰呂布。</p></div></a>
+    <a class="bc reveal" href="/play/?stage=changban"><img src="/img/b-changban.webp" alt="長坂坡" loading="lazy"><div class="t"><h3>長坂坡<small>黃昏 · 魏軍</small></h3><p>單騎救主，七進七出，殺出曹軍虎豹騎的重圍。</p></div></a>
+    <a class="bc reveal" href="/play/?stage=chibi"><img src="/img/b-chibi.webp" alt="赤壁" loading="lazy"><div class="t"><h3>赤壁<small>夜戰 · 曹軍</small></h3><p>萬事俱備，只欠東風：點燃火船，火燒連環船陣。</p></div></a>
+    <a class="bc reveal" href="/play/?stage=fancheng"><img src="/img/b-fancheng.webp" alt="樊城" loading="lazy"><div class="t"><h3>樊城<small>秋雨 · 魏軍</small></h3><p>漢水暴漲，掘開堤壩，水淹七軍，威震華夏。</p></div></a>
+  </div>
+</div></section>
+
+<section id="story"><div class="wrap">
+  <div class="head reveal"><h2>蜀漢演義</h2><small>Story</small><p>按史書的順序，從桃園初陣一路打到威震華夏。</p></div>
+  <div class="story reveal">
+    <div class="ch"><div class="y">中平元年 · 184</div><h3>桃園初陣</h3><div class="n">第一章 · 關羽</div><p>黃巾作亂，桃園三兄弟初出茅廬。</p></div>
+    <div class="ch"><div class="y">初平元年 · 190</div><h3>三英戰呂布</h3><div class="n">第二章 · 張飛</div><p>十八路諸侯討董，虎牢關前會飛將。</p></div>
+    <div class="ch"><div class="y">建安十三年 · 208</div><h3>單騎救主</h3><div class="n">第三章 · 趙雲</div><p>曹軍追至長坂，懷抱阿斗七進七出。</p></div>
+    <div class="ch"><div class="y">建安十三年 · 208</div><h3>火燒赤壁</h3><div class="n">第四章 · 諸葛亮</div><p>萬事俱備，只欠東風。</p></div>
+    <div class="ch"><div class="y">建安二十四年 · 219</div><h3>水淹七軍</h3><div class="n">第五章 · 關羽</div><p>秋雨連綿，漢水暴漲，威震華夏。</p></div>
+  </div>
+  <div class="story-cta reveal"><a class="btn" href="/play/?story=c1&amp;stage=huangjin&amp;hero=guanyu">從第一章開始<small>START THE STORY</small></a></div>
+</div></section>
+
+<section id="news"><div class="wrap">
+  <div class="head reveal"><h2>戰報</h2><small>Updates</small><p>持續更新中：新武將、新戰役、新玩法。</p></div>
+  <div class="news reveal">
+    <div class="nw"><time>2026 · 10 · 24</time><div><h3>兵種與戰馬</h3><p>弓兵、大盾兵、騎兵登場；按 U 召喚戰馬，馬上作戰、衝撞敵陣，空馬也能搶來騎。官網上線。</p></div></div>
+    <div class="nw"><time>2026 · 10 · 23</time><div><h3>大戰場與據點</h3><p>戰場擴大四倍，每處五座敵營，每章七、八個目標；全圖、疾走。</p></div></div>
+    <div class="nw"><time>2026 · 10 · 23</time><div><h3>蜀漢演義 · 新戰役</h3><p>五章劇情模式；新增黃巾之亂與樊城（水淹七軍）。</p></div></div>
+    <div class="nw"><time>2026 · 10 · 23</time><div><h3>裝備與等級</h3><p>武器屬性、寶物、寶箱與武庫，武將等級與經驗。</p></div></div>
+    <div class="nw"><time>2026 · 10 · 22</time><div><h3>手機與平板</h3><p>觸控操作、自動畫質、打包部署，手機打開就能玩。</p></div></div>
+  </div>
+</div></section>
+
+<div class="join">
+  <h2>群英集結</h2>
+  <p>關注作者獲取更新，或到 GitHub 看原始碼。<br>Follow for updates, or read the source on GitHub.</p>
+  <div class="cta">
+    <a class="btn main" href="/play/">立即出陣<small>PLAY NOW</small></a>
+    <a class="soc" href="https://x.com/sciencedegens" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.9 1.2h3.7l-8 9.2 9.4 12.4h-7.4l-5.8-7.6-6.6 7.6H.5l8.6-9.8L0 1.2h7.6l5.2 6.9zm-1.3 19.4h2L6.5 3.3H4.3z"/></svg>@sciencedegens</a>
+    <a class="soc" href="https://github.com/wuxie888/voxel-three-kingdoms" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>GitHub</a>
+  </div>
+</div>
+<footer>
+  © 2026 體素三國 Voxel Three Kingdoms · 作者 <a href="https://x.com/sciencedegens" target="_blank" rel="noopener">@sciencedegens</a><br>
+  以 MIT 授權的 voxel-musou（BubuAi）為基礎開發 · 使用 <a href="https://threejs.org" target="_blank" rel="noopener">Three.js</a> · <a href="https://github.com/wuxie888/voxel-three-kingdoms" target="_blank" rel="noopener">原始碼</a>
+</footer>
+<script>
+  const nav = document.getElementById('nav');
+  const solid = () => nav.classList.toggle('solid', scrollY > 40);
+  addEventListener('scroll', solid, { passive: true }); solid();
+  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
+  document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+  // the trailer only where it can play muted inline and the connection is not metered; the poster otherwise
+  const v = document.querySelector('.hero video');
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || navigator.connection?.saveData) v.remove();
+</script>
+</body>
+</html>

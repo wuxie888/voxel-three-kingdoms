@@ -340,6 +340,8 @@
   #touch .tb-dodge { right: 9vh; bottom: 33vh; width: 14vh; height: 14vh; }
   #touch .tb-musou { right: 26vh; bottom: 40vh; width: 13vh; height: 13vh; opacity: .55; }
   #touch .tb-musou b { font-size: 4.2vh; }
+  #touch .tb-horse { right: 47vh; bottom: 4vh; width: 11vh; height: 11vh; }
+  #touch .tb-horse b { font-size: 4.6vh; }
   #touch .tb-musou.ready { opacity: 1; background: radial-gradient(rgba(255,214,90,.8), rgba(200,120,20,.65)); animation: muPulse 1s ease-in-out infinite; }
   @keyframes muPulse { 50% { box-shadow: inset 0 0 0 .35vh #fff1c0, 0 0 4vh rgba(255,200,60,.9); } }
   #touch .tp { position: fixed; left: 1.6vh; top: 1.6vh; width: 9vh; height: 9vh; border: 0; border-radius: 50%; padding: 0;
@@ -514,6 +516,7 @@
 <div id="hud"></div>
 <div id="menu">
   <div class="links">
+    <a href="/" title="官網 Official site"><svg viewBox="0 0 24 24"><path d="M12 2 1.5 10.4l1.3 1.6L4 11v10.5h6.2v-6.4h3.6v6.4H20V11l1.2 1 1.3-1.6z"/></svg><small>官網</small>HOME</a>
     <a href="https://x.com/sciencedegens" target="_blank" rel="noopener" title="作者 X / Twitter"><svg viewBox="0 0 24 24"><path d="M18.9 1.2h3.7l-8 9.2 9.4 12.4h-7.4l-5.8-7.6-6.6 7.6H.5l8.6-9.8L0 1.2h7.6l5.2 6.9zm-1.3 19.4h2L6.5 3.3H4.3z"/></svg><small>作者</small>@sciencedegens</a>
     <a href="https://github.com/wuxie888/voxel-three-kingdoms" target="_blank" rel="noopener" title="开源仓库 GitHub"><svg viewBox="0 0 24 24"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg><small>開源</small>GitHub</a>
   </div>
@@ -532,8 +535,9 @@
     <div><span>無雙<small>MUSOU</small></span><span><kbd>I</kbd> · gold gauge full</span></div>
     <div><span>視角<small>CAMERA</small></span><span><kbd>Q</kbd><kbd>E</kbd> / drag</span></div>
     <div><span>全圖<small>MAP</small></span><span><kbd>M</kbd> / click the minimap</span></div>
+    <div><span>騎馬<small>HORSE</small></span><span><kbd>U</kbd> · call / mount / dismount</span></div>
   </div>
-  <div class="tguide"><b>左半屏</b> 移動 · <b>攻</b> 攻擊 · <b>蓄</b> 蓄力 · <b>跳</b> 跳躍 · <b>閃</b> 閃避 · <b>無雙</b> 槽滿時發動 · <b>右半屏滑動</b> 視角 · <b>小地圖</b> 全圖</div>
+  <div class="tguide"><b>左半屏</b> 移動 · <b>攻</b> 攻擊 · <b>蓄</b> 蓄力 · <b>跳</b> 跳躍 · <b>閃</b> 閃避 · <b>無雙</b> 槽滿時發動 · <b>馬</b> 騎馬 · <b>右半屏滑動</b> 視角 · <b>小地圖</b> 全圖</div>
   <div class="gobar"><button id="go">出陣<small>START</small></button><button id="storyBtn">劇情<small>STORY</small></button><button id="arm">武庫<small>ARMORY</small></button></div>
   <div class="hint">← → 選將 hero · ↑ ↓ 選戰場 battle · Enter to start · Esc to pause · gamepad supported · best with keyboard, mouse and sound on</div>
 </div>
