@@ -17,6 +17,7 @@
 // randomness is Math.random, never the sim RNG. Starts on the first user gesture.
 import { on } from '../core/events.js';
 import { MOVES } from '../hero/moves.js';
+import { KIND } from '../crowd/crowd.js';
 import { buildBank, makeIR, noiseBuf } from './bank.js';
 
 const rnd = (a, b) => a + (b - a) * Math.random();
@@ -49,7 +50,7 @@ export function createAudio(game) {
   let muFrame = -1;                           // last sim frame that voiced a Musou tick (several strikes share a frame)
   let mu = null;                              // current Musou timing (musou:start payload, frames)
   let musicK = new URLSearchParams(location.search).get('music') === '0' ? 0 : 1;   // music=0 → battle bed + drums only
-  let intensity = 0, lastT = performance.now(), drone = null, bedOn = false, nextShout = 0;
+  let intensity = 0, lastT = performance.now(), drone = null, bedOn = false, nextShout = 0, hoofT = 0;
   const lvl = { sfx: 1, vox: VOX };            // resting bus gains (the Musou dip returns to these)
   const last = new Map();                     // throttles
   const lastPick = new Map();
@@ -193,6 +194,23 @@ export function createAudio(game) {
       for (let t = seenT + 1; t <= h.moveT; t++) cue(m, t);
       seenT = Math.max(seenT, h.moveT);
     }
+    // hoofbeats: the nearest galloping rider within 35 m, one four-beat cluster per stride
+    hoofT -= dt;
+    if (hoofT <= 0 && B.gallop) {
+      const c = game.crowd;
+      let best = -1, bd = 35 * 35;
+      for (let i = 0; i < c.grunts; i++) {
+        if (c.kind[i] !== KIND.RIDER || c.st[i] < 1 || c.st[i] > 4) continue;
+        const d2 = (c.x[i] - h.x) ** 2 + (c.z[i] - h.z) ** 2;
+        if (d2 < bd) { bd = d2; best = i; }
+      }
+      const v = best >= 0 ? Math.hypot(c.vx[best], c.vz[best]) : 0;
+      if (v > 2) {
+        const { pan, att } = place(c.x[best], c.z[best]);
+        play(pick(B.gallop), { gain: 0.55 * att * Math.min(1, v / 8), rate: rnd(0.95, 1.05), pan, send: 0.08, bus: underBus });
+        hoofT = 1 / (0.8 + 0.14 * v);
+      } else hoofT = 0.3;
+    }
     // bed follows combat intensity (hits per ~2 s)
     intensity *= Math.exp(-dt / 2);
     const b = 1 - Math.exp(-intensity / 60), t = ctx.currentTime;   // ≈0.35 for a light skirmish, ≈0.8 in a packed melee
@@ -290,6 +308,35 @@ export function createAudio(game) {
     const { pan, att } = place(e.x, e.z);
     play(pick(B.enemySwing), { gain: 0.3 * att, rate: rnd(0.85, 1.1), pan, send: 0.1, bus: underBus });
     if (e.officer || Math.random() < 0.25) play(pick(B.grunt), { gain: 0.25 * att, rate: rnd(1.05, 1.2), pan, bus: vox, send: 0.15 });
+  });
+
+  // ---- bows and horses: the loose, arrows landing / striking / cut down, a troop's whinny, a rider thrown
+  on('arrow:loose', (e) => {
+    if (!ok() || !gate('bow', 70)) return;
+    const { pan, att } = place(e.x, e.z);
+    play(pick(B.bow), { gain: 0.45 * att, rate: rnd(0.9, 1.1), pan, send: 0.15, bus: underBus });
+  });
+  on('arrow:hit', () => { if (ok()) play(pick(B.thunk), { gain: 0.7, rate: rnd(0.9, 1.1), send: 0.08, prio: 1 }); });
+  on('arrow:ground', (e) => {
+    if (!ok() || !gate('thunk', 90)) return;
+    const { pan, att } = place(e.x, e.z);
+    if (att > 0.3) play(pick(B.thunk), { gain: 0.3 * att, rate: rnd(0.95, 1.2), pan, send: 0.1, bus: underBus });
+  });
+  on('arrow:deflect', () => { if (ok()) play(pick(B.clank), { gain: 0.55, rate: rnd(1.3, 1.6), send: 0.15, prio: 1 }); });
+  on('crowd:cavalry', (e) => {
+    if (!ok()) return;
+    const { pan, att } = place(e.x, e.z);
+    play(pick(B.neigh), { gain: 0.5 * Math.max(0.5, att), rate: rnd(0.95, 1.05), pan, send: 0.3, bus: vox });
+  });
+  on('rider:fall', (e) => {
+    if (!ok() || !gate('neigh', 1500)) return;
+    const { pan, att } = place(e.x, e.z);
+    play(pick(B.neigh), { gain: 0.4 * att, rate: rnd(1.0, 1.15), pan, send: 0.25, bus: vox });
+  });
+  on('shield:break', (e) => {
+    if (!ok() || !gate('sbreak', 60)) return;
+    const { pan } = place(e.x, e.z);
+    play(pick(B.clank), { gain: 0.7, rate: rnd(0.7, 0.85), pan, send: 0.25, prio: 1 });
   });
 
   // ---- guard, supplies

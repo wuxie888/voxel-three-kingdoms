@@ -5,6 +5,7 @@
 // the HUD and menu to the touch layout (index.html).
 const BUTTONS = [
   ['attack', '攻', 'ATK'], ['charge', '蓄', 'CHG'], ['jump', '跳', 'JUMP'], ['dodge', '閃', 'DODGE'], ['musou', '無雙', 'MUSOU'],
+  ['horse', '馬', 'HORSE'],
 ];
 
 export function createTouch(input, game, { onPause }) {

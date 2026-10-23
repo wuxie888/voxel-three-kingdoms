@@ -293,6 +293,36 @@ function fall(oc, dst, heavy) {                               // body hits the g
   if (Math.random() < 0.6) clank(oc, dst, rnd(0.01, 0.05), rnd(1100, 2000), 0.25, 0.08);
 }
 
+// ---- bows and horses
+function twang(oc, dst) {                                    // a bow loosed: plucked string thrum, a click, the arrow's whip
+  const s = osc(oc, 'sawtooth', 0, 0.3, rnd(150, 190)), lp = filt(oc, 'lowpass', 2200, 2);
+  pts(lp.frequency, 0, [[0, 2400], [0.15, 400]], true);
+  s.connect(lp).connect(perc(oc, 0, 0.001, 0.18, 0.7)).connect(dst);
+  nz(oc, 0, 0.01).connect(filt(oc, 'highpass', 2500)).connect(perc(oc, 0, 0.0005, 0.008, 0.6)).connect(dst);
+  whoosh(oc, dst, { dur: 0.16, lo: 1200, hi: 3800, pk: 0.3, q: 1.4, tear: 0.5, whistle: 0.3 });
+}
+function thunk(oc, dst) {                                    // an arrowhead into earth or armour, the shaft quivering
+  nz(oc, 0, 0.03).connect(filt(oc, 'bandpass', rnd(500, 900), 1.5)).connect(perc(oc, 0, 0.001, 0.035, 1)).connect(dst);
+  const b = osc(oc, 'sine', 0, 0.1); pts(b.frequency, 0, [[0, 220], [0.04, 90]], true);
+  b.connect(perc(oc, 0, 0.001, 0.04, 0.8)).connect(dst);
+  osc(oc, 'triangle', 0.005, 0.15, rnd(330, 420)).connect(perc(oc, 0.005, 0.001, 0.1, 0.25)).connect(dst);
+}
+function clop(oc, dst, t, g) {                               // one hoof on hard ground: a knock and a dull thump
+  nz(oc, t, 0.04).connect(filt(oc, 'bandpass', rnd(700, 1100), 2.2)).connect(perc(oc, t, 0.001, 0.03, g)).connect(dst);
+  const b = osc(oc, 'sine', t, 0.12); pts(b.frequency, t, [[0, rnd(140, 180)], [0.05, 70]], true);
+  b.connect(perc(oc, t, 0.002, 0.06, g * 0.8)).connect(dst);
+  nz(oc, t, 0.06).connect(filt(oc, 'lowpass', 600)).connect(perc(oc, t, 0.002, 0.05, g * 0.5)).connect(dst);
+}
+function gallop(oc, dst) { [0, 0.075, 0.2, 0.27].forEach((t, k) => clop(oc, dst, t + rnd(-0.008, 0.008), 0.7 + 0.1 * k)); }   // one stride, four beats
+function neigh(oc, dst) {                                    // a whinny: a reedy glide up, a trilled fall, nasal formants, breath
+  const o = osc(oc, 'sawtooth', 0, 1.1); pts(o.frequency, 0, [[0, 520], [0.12, 980], [0.35, 860], [0.9, 380]], true);
+  const vib = osc(oc, 'sine', 0, 1.1, 22), vg = gain(oc, 55); vib.connect(vg).connect(o.frequency);
+  const f1 = filt(oc, 'bandpass', 1100, 3), f2 = filt(oc, 'bandpass', 2500, 4), sum = gain(oc, 1);
+  o.connect(f1).connect(sum); o.connect(f2).connect(sum);
+  sum.connect(env(oc, 0, [[0, 0], [0.04, 0.9], [0.3, 0.7], [0.75, 0.5], [1.05, 0]])).connect(dst);
+  nz(oc, 0, 1.0).connect(filt(oc, 'bandpass', 3000, 1)).connect(env(oc, 0, [[0, 0], [0.05, 0.15], [0.9, 0.05], [1.0, 0]])).connect(dst);
+}
+
 // ---- stingers
 function bell(oc, dst, t, f, g, dec) {
   [1, 2.0, 2.76, 3.9, 5.4].forEach((r, j) => osc(oc, 'sine', t, dec * 2, f * r).connect(perc(oc, t, 0.002, dec / (1 + j * 0.5), g / (1 + j * 0.9))).connect(dst));
@@ -434,6 +464,9 @@ export async function buildBank(B = {}) {
     bake(2.8, (oc, d) => {                                   // army roar swell
       for (let i = 0; i < 18; i++) smp(oc, d, pick(B.crowd), rnd(0, 0.9), rnd(0.8, 1.05), rnd(0.4, 1), rnd(-0.9, 0.9));
     }, 2),
+  ]);
+  await put(['bow', 'thunk', 'gallop', 'neigh'], [
+    n(3, () => bake(0.35, twang)), n(4, () => bake(0.2, thunk)), n(3, () => bake(0.45, gallop)), n(2, () => bake(1.2, neigh)),
   ]);
   await loops;
   return B;

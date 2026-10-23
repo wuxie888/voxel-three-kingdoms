@@ -709,7 +709,12 @@ export function createVfx(scene, game, world) {
     : dustPuff(e.x, e.z, e.speed > 6 ? 3 : 1, e.speed > 6 ? 1.1 : 0.6, e.speed > 6 ? 0.36 : 0.22, 0.05, 0.42));
   on('jump', (e) => dustPuff(e.x, e.z, 4, 1.8, 0.42, 0.06, 0.45));
   on('land', (e) => { dustPuff(e.x, e.z, e.hard ? 9 : 5, 2.4, 0.4); dustRing(e.x, e.z, e.hard ? 12 : 9, 0.35, e.hard ? 4.5 : 3.2, 0.42, 0.5); });
-  on('hero:hurt', (e) => e.armored ? star(e.x, e.y, e.z, 0.45, 0.06, [1.6, 0.5, 0.3]) : star(e.x, e.y, e.z, 0.9, 0.1, [2.4, 0.5, 0.3]));
+  on('hero:hurt', (e) => e.armored ? star(e.x, e.y, e.z, 0.45, 0.06, [1.6, 0.5, 0.3]) : star(e.x, e.y, e.z, e.kind === 'arrow' ? 0.55 : 0.9, 0.1, [2.4, 0.5, 0.3]));
+  // arms (crowd.js): an arrow cut out of the air, one landing near him, a tower shield knocked aside, a rider thrown
+  on('arrow:deflect', (e) => { star(e.x, e.y, e.z, 0.6, 0.08, [2.4, 2.2, 1.8]); embers(e.x, e.y, e.z, 4, 0.3); });
+  on('arrow:ground', (e) => { const h = game.hero; if ((e.x - h.x) ** 2 + (e.z - h.z) ** 2 < 400) dustPuff(e.x, e.z, 1, 0.5, 0.2, 0.03, 0.35); });
+  on('shield:break', (e) => { star(e.x, e.y, e.z, 1.1, 0.12, [2.4, 1.9, 1.0]); embers(e.x, e.y, e.z, 6, 0.4); });
+  on('rider:fall', (e) => { dustPuff(e.x, e.z, 8, 2.6, 0.55, 0.08, 0.6); dustRing(e.x, e.z, 10, 0.4, 3.6, 0.45, 0.55); });
 
   // Heavy windows open → finisher volume. Charge finishers get their benchmark identity (charge-attacks notes):
   // C3 gold pillar ring (after the dark smoke arc, see afterStep), C5 fan of blue-white shafts from the ground,

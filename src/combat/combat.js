@@ -8,7 +8,7 @@
 // - Launch: ≈1 s airborne with a ≈0.3 s apex float, tumbling to horizontal, one small rebound, down ≥ 2 s.
 // - Rotation in the air is planned so bodies touch down already lying (no snap on landing); juggles re-plan it.
 import { MOVES } from '../hero/moves.js';
-import { ST, CROWD } from '../crowd/crowd.js';
+import { ST, CROWD, KIND } from '../crowd/crowd.js';
 import { emit } from '../core/events.js';
 import { hash01 } from '../core/rng.js';
 import { ARENA_RADIUS } from '../world/world.js';
@@ -54,7 +54,7 @@ export function createCombat(game) {
   /** Is enemy i inside `hit` cast from (ox, oz) facing yaw? */
   function inShape(i, hit, ox, oz, yaw) {
     const c = game.crowd;
-    return pointIn(c.x[i], c.y[i], c.z[i], COMBAT.enemyR, hit, ox, oz, yaw);
+    return pointIn(c.x[i], c.y[i], c.z[i], c.kind[i] === KIND.RIDER ? CROWD.rider.r : COMBAT.enemyR, hit, ox, oz, yaw);   // a horse is a big target
   }
   /** Is a body of radius r at (x, y, z) inside `hit` cast from (ox, oz) facing yaw? */
   function pointIn(x, y, z, r, hit, ox, oz, yaw) {
@@ -164,6 +164,26 @@ export function createCombat(game) {
     emit('block', { i, x: c.x[i], y: c.y[i] + 1.3, z: c.z[i] });
     return true;
   }
+  // 大盾兵 (crowd.js): the shield turns a light blow from the front — a clank, a shove, no damage; the breakN-th blow in
+  // a row breaks it. A charge attack, a finisher or anything that is not a combo move (the Musou, a 雷 arc, the flood) knocks
+  // it aside: the blow lands and the shield stays down for `open` sf. From the side or behind, or mid-swing, he is open.
+  function shielded(i, hit, ox, oz, moveId) {
+    const c = game.crowd, s = c.st[i], S = CROWD.shield;
+    if (game.frame < c.openF[i]) return false;
+    if (s !== ST.IDLE && s !== ST.ADVANCE && s !== ST.GUARD && !(s === ST.ATTACK && c.stT[i] < CROWD.windup - 8)) return false;
+    let a = Math.atan2(ox - c.x[i], oz - c.z[i]) - c.yaw[i]; a = Math.atan2(Math.sin(a), Math.cos(a));
+    if (Math.abs(a) > S.cone) { guardN[i] = 0; return false; }
+    if (hit.heavy || !MOVES[moveId] || isCharge(moveId) || ++guardN[i] >= S.breakN) {
+      guardN[i] = 0; c.openF[i] = game.frame + S.open;
+      emit('shield:break', { i, x: c.x[i], y: c.y[i] + 1.1, z: c.z[i] });
+      return false;
+    }
+    const dx = c.x[i] - ox, dz = c.z[i] - oz, l = Math.hypot(dx, dz) || 1;
+    c.x[i] += dx / l * 0.12; c.z[i] += dz / l * 0.12;
+    c.cd[i] = Math.min(c.cd[i], 30);                           // and answers soon
+    emit('block', { i, x: c.x[i], y: c.y[i] + 1.1, z: c.z[i], shield: true });
+    return true;
+  }
   // Officers break out of a held chain (DW): once a chain (hits under 2.5 s apart) has taken `breakout` of his health
   // (difficulty), an officer shrugs the reaction off and swings straight back — a quick 0.25 s wind-up — with armour for
   // 1.3 s (blows still hurt, they no longer stagger him). A combo has to make room or be answered.
@@ -228,6 +248,7 @@ export function createCombat(game) {
     const c = game.crowd, h = game.hero;
     const officer = c.type[i] === 1;
     if (officer && guarded(i, hit, ox, oz, moveId)) return false;
+    if (c.kind[i] === KIND.SHIELD && shielded(i, hit, ox, oz, moveId)) return false;
     // push direction: radial from the attacker, biased along the attack facing for thrusts
     let dx = c.x[i] - ox, dz = c.z[i] - oz;
     const l = Math.hypot(dx, dz) || 1;
@@ -243,8 +264,16 @@ export function createCombat(game) {
     game.crowd.releaseToken(i);
     let kb = hit.kb, force = hit.force || 0, lift = hit.lift || 0;
     const killed = c.hp[i] <= 0 && !c.kod[i];
+    // 騎兵: light blows glance off a man in the saddle; a heavy one, a charge attack, a launch or blow-away, a jump
+    // attack, the Musou or the killing blow throws him off (he lands on foot, the horse runs loose)
+    const rider = c.kind[i] === KIND.RIDER;
+    const unhorse = rider && (killed || hit.heavy || isCharge(moveId) || !MOVES[moveId] || kb === 'launch' || kb === 'blow' || kb === 'spin' || h.y > 0.8);
+    if (unhorse) {
+      c.unhorse(i);
+      if (kb === 'flinch' || kb === 'push') { kb = 'blow'; lift = Math.max(lift, 4.5); force = Math.max(force, 3); }
+    }
     // an armoured officer (breakout) takes the damage without reacting; a long chain sets one off
-    const armoured = officer && !killed && (game.frame < c.armorF[i] || (MOVES[moveId] && breakout(i, hit.dmg * atkK(h))));
+    const armoured = (rider && !unhorse) || (officer && !killed && (game.frame < c.armorF[i] || (MOVES[moveId] && breakout(i, hit.dmg * atkK(h)))));
     const s0 = c.st[i], air = s0 === ST.AIR, downed = s0 === ST.DOWN || s0 === ST.GETUP;
     if (officer && !hit.heavy && !killed) { if (kb === 'launch' || kb === 'blow' || kb === 'spin') kb = 'push'; force *= 0.4; }
     let koThrow = false;
@@ -434,6 +463,13 @@ export function createCombat(game) {
     const c = game.crowd;
     c.rx[i] += ((c.rx[i] < 0 ? -HALF_PI : HALF_PI) - c.rx[i]) * k;
   }
+
+  /** A rider runs the hero down (crowd.js rider): he is thrown along the line of the charge. */
+  cb.trample = (i) => {
+    const c = game.crowd;
+    emit('enemy:attack', { i, x: c.x[i], y: 1.1, z: c.z[i], officer: true });
+    game.hero.hurt(CROWD.rider.dmg, c.x[i] - Math.sin(c.yaw[i]) * 2, c.z[i] - Math.cos(c.yaw[i]) * 2, true, 'trample');
+  };
 
   /** An enemy's strike reaches its active frame (called by crowd AI). */
   cb.enemyStrike = (i) => {

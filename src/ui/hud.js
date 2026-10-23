@@ -12,7 +12,7 @@ import { STAGE } from '../stages/index.js';
 import { forHero } from '../stages/campaign.js';
 import { ITEMS, BUFF } from '../supplies/supplies.js';
 import { RARITY } from '../progress/loot.js';
-import { ST } from '../crowd/crowd.js';
+import { ST, KIND } from '../crowd/crowd.js';
 import { ARENA_RADIUS, WALL_Z, GATE_X } from '../world/world.js';
 
 const OFFICERS = STAGE.enemy.officers;                         // four tags; the names come from game.crowd.names (a script may rename a slot)
@@ -29,7 +29,7 @@ export function createHud(root, game, { camera = null } = {}) {
     <div class="h-intro"><div class="zh">${HERO.zh}</div><i class="seal">${HERO.seal}</i><div class="en">${HERO.en}</div>
       <div class="sub">${HERO.sub}</div>
       <div class="keys"><kbd>WASD</kbd> 移動 move · <kbd>J</kbd> 攻擊 attack · <kbd>K</kbd> 蓄力 charge<br>
-        <kbd>Space</kbd> 跳躍 jump · <kbd>L</kbd> 閃避 dodge · <kbd>I</kbd> 無雙 musou · <kbd>Q</kbd><kbd>E</kbd> 視角 · <kbd>H</kbd> 說明</div></div>
+        <kbd>Space</kbd> 跳躍 jump · <kbd>L</kbd> 閃避 dodge · <kbd>I</kbd> 無雙 musou · <kbd>U</kbd> 騎馬 horse · <kbd>Q</kbd><kbd>E</kbd> 視角 · <kbd>H</kbd> 說明</div></div>
     <div class="h-target"><i class="seal">將</i><b></b><span></span><div class="bar"><em></em><i></i></div><strong>擊破</strong></div>
     <div class="h-map"><div class="morale"><i></i><span>${STAGE.ally.label}</span><span>${STAGE.enemy.ch}</span></div><canvas width="400" height="400"></canvas><i class="seal">${STAGE.seal}</i><small class="mhint">M · 全圖</small></div>
     <div class="h-offs">${OFFICERS.map(([zh, en]) => `<div class="off"><i class="ld"></i><div class="mk">▼▼</div><div class="bd"><b>${zh}</b><span>${en}</span><div class="bar"><em></em><i></i></div></div></div>`).join('')}</div>
@@ -136,6 +136,17 @@ export function createHud(root, game, { camera = null } = {}) {
     text(toastS, I.en); toast.dataset.k = e.kind; S.toastF = game.frame;
   });
   on('stage:clear', () => { if (STAGE.clear) banner(`<em>${STAGE.clear[0]}</em>`, STAGE.clear[1], 200); });
+  on('crowd:cavalry', (e) => {
+    if (game.frame - (S.cavF ?? -1e9) > 1200) { S.cavF = game.frame; banner(`${STAGE.enemy.army}<em>騎兵</em> 來襲`, `${STAGE.enemy.en} cavalry incoming!`, 120); }
+    S.waves.push({ x: e.x, z: e.z, f: game.frame });
+  });
+  on('block', (e) => {                                          // the first shield wall of a battle: how to break it
+    if (e.shield && !S.shieldTip) { S.shieldTip = 1; banner('<em>大盾兵</em> 正面堅固 · 蓄力攻擊破防', 'Shield troops turn blows from the front — break them with a charge attack, or strike from behind', 170); }
+  });
+  on('rider:fall', () => {                                       // the first loose horse of a battle: it can be ridden
+    if (!S.horseTip) { S.horseTip = 1; banner('敵騎 落馬 · 近空馬按 <em>U</em> 騎乘', 'A loose horse — get close and press U to ride it', 150); }
+  });
+  on('scenario', () => { S.shieldTip = 0; S.horseTip = 0; S.cavF = -1e9; });
   on('crowd:wave', (e) => {
     if (game.frame - S.waveF > 600) { S.waveF = game.frame; banner(`<em>${STAGE.enemy.army}</em>援兵 到着`, `${STAGE.enemy.en} reinforcements have arrived!`, 130); }
     S.waves.push({ x: e.x, z: e.z, f: game.frame });
@@ -522,7 +533,10 @@ export function createHud(root, game, { camera = null } = {}) {
         const st = c.st[i];
         if (st === ST.OFF || st === ST.DEAD) continue;
         const x = X(c.x[i]), y = Y(c.z[i]);
-        if (x > -2 && x < 202 && y > -2 && y < 202) map.fillRect(x - 1.5, y - 1.5, 3, 3);
+        if (x > -2 && x < 202 && y > -2 && y < 202) {
+          if (c.kind[i] === KIND.RIDER) { map.fillStyle = '#ff9a3a'; map.fillRect(x - 2.5, y - 2.5, 5, 5); map.fillStyle = '#e0412c'; }   // horsemen
+          else map.fillRect(x - 1.5, y - 1.5, 3, 3);
+        }
       }
       for (let i = c.grunts; i < c.N; i++) {
         if (c.st[i] === ST.OFF || c.st[i] === ST.DEAD) continue;

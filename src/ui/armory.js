@@ -39,7 +39,7 @@ export function createArmory({ onChange }) {
     $('.xp i').style.transform = `scaleX(${h.lv >= LV.max ? 1 : (h.xp / need).toFixed(3)})`;
     $('.xpn').textContent = h.lv >= LV.max ? 'MAX' : `經驗 ${h.xp} / ${need}`;
     const pct = (v) => `${Math.round(v * 100)}%`;
-    $('.ar-stats').innerHTML = [`體力 <b>${HP0 + G.hp}</b>`, `攻擊 <b>+${pct(G.atk)}</b>`, `受傷 <b>−${pct(G.def)}</b>`,
+    $('.ar-stats').innerHTML = [`體力 <b>${Math.round(HP0 + G.hp)}</b>`, `攻擊 <b>+${pct(G.atk)}</b>`, `受傷 <b>−${pct(G.def)}</b>`,
       `無雙 <b>+${pct(G.mus + G.musou)}</b>`, `補給 <b>+${pct(G.heal)}</b>`, `移動 <b>+${pct(G.spd)}</b>`].map((x) => `<span>${x}</span>`).join('');
     // slots
     const slots = [['weapon', '武器', h.weapon], [0, '寶物 一', h.acc[0]], [1, '寶物 二', h.acc[1]]];

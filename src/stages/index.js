@@ -8,7 +8,8 @@ export const STAGES = [
   {
     id: 'changban', zh: '長坂坡', en: 'CHANGBAN', seal: '長坂', time: '黃昏', look: 'dusk', set: 'stream',
     intro: ['<em>長坂坡</em>之戰', 'Battle of Changban — break through Cao Cao\'s pursuit'],
-    enemy: { ch: '魏', army: '魏軍', en: 'Wei', officers: [['夏侯恩', 'XIAHOU EN'], ['晏明', 'YAN MING'], ['淳于導', 'CHUNYU DAO'], ['張郃', 'ZHANG HE']] },
+    enemy: { ch: '魏', army: '魏軍', en: 'Wei', officers: [['夏侯恩', 'XIAHOU EN'], ['晏明', 'YAN MING'], ['淳于導', 'CHUNYU DAO'], ['張郃', 'ZHANG HE']],
+      cavalry: { troops: 2, every: 1800, size: [3, 5] } },   // 虎豹騎: Cao Cao's riders hunt the refugees
     ally: { ch: '蜀', label: '蜀' },
     // 單騎救主: Zhao Yun cuts back through Cao Cao's pursuit for Liu Bei's son, then makes for the bridge Zhang Fei holds
     props: [{ kind: 'well', at: [-52, 38] }, { kind: 'bridge', at: [0, -94] }, { kind: 'ruins', at: [[-36, 58], [-66, 22]] }],
@@ -57,6 +58,7 @@ export const STAGES = [
     id: 'hulao', zh: '虎牢關', en: 'HULAO GATE', seal: '虎牢', time: '白晝', look: 'bright', set: 'pass',
     intro: ['<em>虎牢關</em>之戰', 'Battle of Hulao Gate — the coalition storms Dong Zhuo\'s pass'],
     enemy: { ch: '董', army: '董卓軍', en: 'Dong Zhuo\'s', band: 0x7a3aa0, cloth: 0x3e2a52,
+      mix: { shield: 0.3, archer: 0.12 }, cavalry: { troops: 2, every: 2400 },   // 西涼 horse, the pass held behind shields
       officers: [['華雄', 'HUA XIONG'], ['李傕', 'LI JUE'], ['郭汜', 'GUO SI'], ['高順', 'GAO SHUN']] },
     // 三英戰呂布: Lü Bu rides out of the gate as the boss (boss/boss.js); playing Lü Bu, Guan Yu comes for you instead
     boss: { id: 'lubu', intro: ['三英戰呂布', 'THE THREE HEROES AGAINST LÜ BU'], alt: { id: 'guanyu', intro: ['武聖 關雲長', 'GUAN YU RIDES OUT'] } },
@@ -105,6 +107,7 @@ export const STAGES = [
     id: 'chibi', zh: '赤壁', en: 'RED CLIFFS', seal: '赤壁', time: '夜戰', look: 'night', set: 'river',
     intro: ['<em>赤壁</em>之戰', 'Battle of Red Cliffs — the fire attack burns through the night'],
     enemy: { ch: '曹', army: '曹軍', en: 'Cao', band: 0x2a5ad0, cloth: 0x22305a,
+      mix: { shield: 0.2, archer: 0.18 }, cavalry: { troops: 1, every: 3600 },   // bows on the shore, few horses by the river
       officers: [['蔡瑁', 'CAI MAO'], ['張允', 'ZHANG YUN'], ['于禁', 'YU JIN'], ['曹仁', 'CAO REN']] },
     ally: { ch: '吳', label: '吳' },
     props: [{ kind: 'fireboats', at: [[-38, 82], [0, 88], [38, 82]] }],
@@ -152,6 +155,7 @@ export const STAGES = [
     id: 'huangjin', zh: '黃巾之亂', en: 'YELLOW TURBANS', seal: '黃巾', time: '清晨', look: 'dusk', set: 'altars',
     intro: ['<em>黃巾之亂</em>', 'The Yellow Turban Rebellion — the sorcerer Zhang Jiao rises at Guangzong'],
     enemy: { ch: '黃', army: '黃巾軍', en: 'Yellow Turban', band: 0xe0b020, cloth: 0x7a6430,
+      mix: { shield: 0.1, archer: 0.12 }, cavalry: { troops: 0, every: 0 },   // a peasant host: few shields, no horse
       officers: [['程遠志', 'CHENG YUANZHI'], ['鄧茂', 'DENG MAO'], ['張寶', 'ZHANG BAO'], ['張梁', 'ZHANG LIANG']] },
     ally: { ch: '漢', label: '漢' },
     // the three altars of the Way of Great Peace: break them and the sorcery breaks with them
@@ -199,6 +203,7 @@ export const STAGES = [
     id: 'fancheng', zh: '樊城', en: 'FANCHENG', seal: '樊城', time: '秋雨', look: 'storm', set: 'flood', weather: 'rain',
     intro: ['<em>樊城</em>之戰', 'Battle of Fancheng — the autumn rains swell the Han river'],
     enemy: { ch: '魏', army: '魏軍', en: 'Wei', band: 0x3a5ad0, cloth: 0x2a3050,
+      mix: { shield: 0.3, archer: 0.15 }, cavalry: { troops: 1, every: 3000 },   // 于禁's seven armies
       officers: [['董衡', 'DONG HENG'], ['董超', 'DONG CHAO'], ['于禁', 'YU JIN'], ['龐德', 'PANG DE']] },
     ally: { ch: '蜀', label: '蜀' },
     // 水淹七軍: the levee dams along the swollen Han; breach them and the river takes Yu Jin's seven armies

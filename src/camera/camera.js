@@ -106,7 +106,8 @@ export function createCamSim() {
     s.hx = h.x; s.hz = h.z;
     // a manual look (orbit) holds the seek and the fight drift off until he moves again (r4: attacking in place keeps
     // the player's view; being hit does not count either)
-    if (h.state === 'run' || h.state === 'dodge' || h.state === 'jump') s.look = false;
+    const riding = h.riding && h.state !== 'attack';
+    if (h.state === 'run' || h.state === 'dodge' || h.state === 'jump' || (riding && h.speed > 2)) s.look = false;
     if (inp.pressed.attack || inp.pressed.charge) s.eng = !held;          // this attack was pressed hands-off the stick
     if (s.seekCd > 0) s.seekCd--;
     // a manual look also holds re-frames off for lookHold frames after the stick is let go (the player's view wins)
@@ -138,13 +139,14 @@ export function createCamSim() {
       }
       s.seekV += clamp(want - s.seekV, -acc / 60, acc / 60);
       s.yaw += s.seekV / 60;
-      if (h.state === 'run' || (h.state === 'attack' && !s.look)) {
+      if (h.state === 'run' || riding || (h.state === 'attack' && !s.look)) {
         // lazy realign behind the hero; fades out when he faces the camera (never whips around). In a mob the view
-        // holds (the seek above frames it): only duels with a few soldiers follow his facing.
-        const run = h.state === 'run', d = wrap(h.yaw - s.yaw);
+        // holds (the seek above frames it): only duels with a few soldiers follow his facing. In the saddle it keeps
+        // behind the horse, quicker (a gallop outruns a lazy view)
+        const run = h.state === 'run' || riding, d = wrap(h.yaw - s.yaw);
         const kd = smooth(2.6, 2.0, Math.abs(d)) * (run ? Math.min(1, h.speed / 5) : 1 - mob);
-        const max = run ? CAM.driftMax : CAM.fightMax;
-        s.yaw += clamp(d * (run ? CAM.drift : CAM.fightDrift), -max, max) * kd / 60;
+        const max = run ? CAM.driftMax * (riding ? 1.6 : 1) : CAM.fightMax;
+        s.yaw += clamp(d * (run ? CAM.drift * (riding ? 1.8 : 1) : CAM.fightDrift), -max, max) * kd / 60;
       }
     }
     s.yaw = wrap(s.yaw);
@@ -162,6 +164,7 @@ export function createCameraRig(game, width, height) {
   let yaw = 0, snap = true, blend = 0, warned = false;
   let cine = null;                                // { kind, start, dur, ... } in sim frames
   let pull = 0, bias = 0, leadYs = 0, viewH = height; // smoothed crowd pull-out (fraction), lateral aim bias (m), aerial lead (m)
+  let rideK = 0;                                     // eased 0 → 1 in the saddle
   let lastX = 0, lastZ = 0;                        // hero ground position at the previous render (teleport → snap)
   const pv = new THREE.Vector3();
   // micro-kicks: screen-space px at 720p, fired by events, aged in sim frames (deterministic)
@@ -219,7 +222,11 @@ export function createCameraRig(game, width, height) {
       if (shot) {
         if (shot.id !== cine.phase) { cine.phase = shot.id; snap = true; }
         ({ yaw: camYaw, dist, pitch, fov, height, side, shake: shakeK } = shot);
-      } else fov += CAM.sprintFov * (h.sprint || 0);
+      } else {
+        fov += CAM.sprintFov * (h.sprint || 0);
+        rideK += ((h.riding ? 1 : 0) - rideK) * (1 - Math.exp(-3 * dt));   // in the saddle: back and up (the horse and the road ahead in view)
+        dist *= 1 + 0.38 * rideK; height += 0.75 * rideK;
+      }
       const ky = 1 - Math.exp(-cfg.yawLerp * dt);
       yaw = snap ? camYaw : yaw + wrap(camYaw - yaw) * ky;
       // combat framing (gameplay rig only): pull out in dense crowds, bias the aim toward the nearby mob

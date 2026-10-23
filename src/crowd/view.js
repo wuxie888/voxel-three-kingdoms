@@ -6,11 +6,17 @@
 // pops. Instances are packed each frame (count = visible soldiers of that kind). Committed attackers coil into a big
 // overhead wind-up (0.67 s) with a pixel-star glint on the weapon tip; a blow that will really come flares a big red
 // pixel star for its last 14 sf (a feint keeps the white star). Guards next to a striker
-// (crowd.raiseF) brandish their weapons and shout with him. Officers carry a spinning ▼ marker. Never writes sim state.
+// (crowd.raiseF) brandish their weapons and shout with him. Officers carry a spinning ▼ marker.
+// Arms (crowd.js): bows (quiver on the back, the bow in the left hand; drawing, the arrow runs from the right hand to
+// the bow and the string to both tips, white glint → red for the last 14 sf), tower shields (大盾, held square to the
+// front; knocked aside while crowd.openF), horsemen (seated on a voxel horse with its gait, horse/model.js — loose
+// horses and arrows in flight or stuck in the ground are drawn here too). Never writes sim state.
 import * as THREE from 'three';
 import { STAGE } from '../stages/index.js';
 import { sculpt, shade, boxesGeometry } from '../core/voxel.js';
 import { ST, KIND, CROWD } from './crowd.js';
+import { buildHorseGeometries, gait, strideHz, HORSE_DIM, COATS, FIELD_COATS } from '../horse/model.js';
+import { STEED } from '../hero/mount.js';
 import { patchHitMaterial, hitAttr, hitGlow, recoilPose } from '../combat/hitfx.js';   // hit-impact: victim flash/tint + recoil pose
 import { fadeOccluder, FADE, lensSide } from '../camera/occlusion.js';   // camera part: soldiers between camera and hero dither out
 
@@ -133,7 +139,33 @@ function weaponGeos() {
     if (Math.abs(r - 0.16) < 0.025) return 0xc8a050;
     return (Math.floor(Math.atan2(x, y - 0.12) / (Math.PI / 4)) & 1) ? 0x7a2418 : 0x5e1a12;
   }), b([-0.07, 0.1, 0.13], [0.07, 0.15, 0.17], 0xe0b860)], V, 0.1);
-  return { spear, sword, glaive, pole, shield };
+  // bow: limbs along ±Y from the grip (origin), recurved toward the archer (-Z); the string is drawn separately
+  const bowBoxes = [box([0.05, 0.16, 0.06], [0, 0, 0.02], 0x2a1d16)];
+  for (let k = 1; k <= 6; k++) {
+    const y = k * 0.1, z = 0.02 - 0.012 * k * k + (k === 6 ? 0.05 : 0), c = k === 6 ? BRONZE : k % 2 ? 0x6e4628 : 0x5a3820;
+    bowBoxes.push(box([0.04, 0.11, 0.045], [0, y, z], c), box([0.04, 0.11, 0.045], [0, -y, z], c));
+  }
+  const bow = boxesGeometry(bowBoxes);
+  // arrow along +Z from the nock (0) to the head (0.8): fletching, shaft, iron head
+  const arrow = boxesGeometry([
+    box([0.022, 0.022, 0.74], [0, 0, 0.37], 0x8a6a44), box([0.05, 0.05, 0.08], [0, 0, 0.78], 0x4a4644), box([0.03, 0.03, 0.05], [0, 0, 0.84], 0x6a6662),
+    box([0.075, 0.01, 0.13], [0, 0, 0.08], 0xe8e0d0), box([0.01, 0.075, 0.13], [0, 0, 0.08], 0xc83a26),
+  ]);
+  const string = boxesGeometry([box([0.012, 0.012, 1], [0, 0, 0.5], 0xe8dcc0)]);
+  // quiver on the back (torso space): a leather tube, a red rim, fletchings sticking out of the top
+  const quiver = boxesGeometry([
+    box([0.13, 0.42, 0.11], [0.09, 0.2, -0.17], 0x5a3a22), box([0.15, 0.04, 0.13], [0.09, 0.4, -0.17], 0xa02a1c),
+    box([0.03, 0.12, 0.03], [0.06, 0.47, -0.15], 0xe8e0d0), box([0.03, 0.14, 0.03], [0.11, 0.48, -0.19], 0xc83a26), box([0.03, 0.11, 0.03], [0.09, 0.46, -0.13], 0xe8e0d0),
+  ]).translate(-0.09, -0.2, 0.17).rotateZ(-0.35).rotateX(-0.12).translate(0.09, 0.2, -0.17);   // slung across the back
+  // tower shield (大盾): a tall board faced in the army's colour, bronze rim and boss, held at its middle (origin), face +Z
+  const tshield = sculpt([b([-0.3, -0.5, 0.0], [0.3, 0.46, 0.07], (x, y, z) => {
+    if (Math.abs(x) > 0.26 || y < -0.46 || y > 0.42) return BRONZE;                  // rim
+    if (z < 0.035) return 0x4a3020;                                                    // the back: planks
+    if (Math.hypot(x, y + 0.02) < 0.09) return (x + y) % 0.1 > 0.05 ? 0xe0b860 : BRONZE;   // boss
+    if (Math.abs(y - 0.24) < 0.03 || Math.abs(y + 0.28) < 0.03) return 0x1a1210;      // iron bands
+    return Math.abs(x) < 0.1 && Math.abs(y + 0.02) < 0.2 ? 0xd8b060 : (STAGE.enemy.cloth || 0x7a2418);
+  })], V, 0.08);
+  return { spear, sword, glaive, pole, shield, bow, arrow, string, quiver, tshield };
 }
 
 /** All crowd geometries (exported for the triangle-count check). */
@@ -182,8 +214,10 @@ function flagTexture() {
 // pose channels (per soldier): torso, head, armR, armL, thighR, thighL (rx,ry,rz) · shinR, shinL (rx) · weapR, weapL (rx,ry,rz)
 const TO = 0, HE = 3, AR = 6, AL = 9, TR = 12, TL = 15, SR = 18, SL = 19, WR = 20, WL = 23, NCH = 26;
 const CHN = { TO, HE, AR, AL, TR, TL, SR, SL, WR, WL };   // hit-impact: channel offsets for recoilPose (combat/hitfx.js)
-const GROUP = [0, 1, 2, 3, 2];                  // kind → pose group: 0 spear, 1 sword+shield, 2 glaive, 3 standard-bearer
-const TIP = [1.72, 0.86, 2.25, 2.7];             // weapon tip distance along +Z per group
+// kind → pose group: 0 spear, 1 sword+buckler, 2 glaive, 3 standard-bearer, 4 bow, 5 sword+tower shield (riders: spear)
+const GROUP = [0, 1, 2, 3, 2, 4, 5, 0];
+const TIP = [1.72, 0.86, 2.25, 2.7, 0, 0.86];     // weapon tip distance along +Z per group (bows: the arrow's head)
+const DRAW = CROWD.archer.draw;
 const h01 = (i, k = 0) => (((i + 1) * 2654435761 + k * 40503) >>> 0) / 4294967296;
 const legH = (a, bb, rz) => (0.42 * Math.cos(a) + 0.42 * Math.cos(a + bb)) * Math.cos(rz);   // hip → sole height
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
@@ -227,6 +261,7 @@ export function createCrowdView(scene, game) {
   /** shadow: true (the mesh casts), false, or a proxy geometry that casts instead (shares the instance matrices) */
   const mk = (geo, cap, material = mat, shadow = true) => {
     const m = new THREE.InstancedMesh(geo, material, Math.max(1, cap));
+    m.count0 = Math.max(1, cap);                               // capacity (count is the per-frame fill)
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, cap) * 3).fill(1), 3);
     m.instanceColor.setUsage(THREE.DynamicDrawUsage);
@@ -248,6 +283,15 @@ export function createCrowdView(scene, game) {
     spear: mk(geos.spear, G), sword: mk(geos.sword, G), shield: mk(geos.shield, G), glaive: mk(geos.glaive, G + O), pole: mk(geos.pole, G),
     o_hips: mk(geos.o_hips, O), o_torso: mk(geos.o_torso, O), o_head: mk(geos.o_head, O),
     o_arm: mk(geos.o_arm, O * 2), o_thigh: mk(geos.o_thigh, O * 2), o_shin: mk(geos.o_shin, O * 2),
+    bow: mk(geos.bow, G), quiver: mk(geos.quiver, G, mat, false), string: mk(geos.string, G * 2, mat, false),
+    nocked: mk(geos.arrow, 32, mat, false), tshield: mk(geos.tshield, G),
+    arrow: mk(geos.arrow, CROWD.archer.pool, mat, false),
+  };
+  // horses: the cavalry's, loose ones (horse/horses.js); coat parts are tinted per horse (instance colour)
+  const HG = buildHorseGeometries(), HC = CROWD.rider.cap + 12;
+  const HM = {
+    body: mk(HG.body, HC), tack: mk(HG.tack, HC), head: mk(HG.head, HC), mane: mk(HG.mane, HC, mat, false),
+    upper: mk(HG.upper, HC * 4), lower: mk(HG.lower, HC * 4), tail: mk(HG.tail, HC, mat, false),
   };
   const PG = { hips: M.hips, torso: M.torso, head: M.head, arm: M.arm, thigh: M.thigh, shin: M.shin };
   const PO = { hips: M.o_hips, torso: M.o_torso, head: M.o_head, arm: M.o_arm, thigh: M.o_thigh, shin: M.o_shin };
@@ -275,8 +319,9 @@ export function createCrowdView(scene, game) {
   M.flare = mk(geos.glint, 32, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.48, 0.01, 0.005), depthTest: false, fog: false }), false);
   M.flare.renderOrder = 6;
 
-  // per-soldier render state: blended pose channels, a "seen" flag (snap on first sight), stable look variety
-  const cur = new Float32Array(N * NCH), T = new Float32Array(NCH), C = new Float32Array(NCH), seen = new Uint8Array(N);
+  // per-soldier render state: blended pose channels, a "seen" flag (snap on first sight), stable look variety, the
+  // stride phase of a rider's horse
+  const cur = new Float32Array(N * NCH), T = new Float32Array(NCH), C = new Float32Array(NCH), seen = new Uint8Array(N), hph = new Float32Array(N);
   const tint = new Float32Array(N), side = new Float32Array(N), size = new Float32Array(N);
   for (let i = 0; i < N; i++) { tint[i] = 0.86 + h01(i) * 0.28; side[i] = h01(i, 1) < 0.5 ? 1 : -1; size[i] = 0.96 + h01(i, 2) * 0.08; }
   let time = 0;
@@ -300,7 +345,7 @@ export function createCrowdView(scene, game) {
         // pumped at the hero, free arm up — the ring surges on the beat
         const pump = Math.sin(time * 11 + i * 0.7) * 0.22;
         set3(TO, -0.14, -0.12 * sd, 0); set3(HE, -0.36, 0.1 * sd, 0);
-        if (g === 1) { set3(AR, -2.75 + pump, 0, -0.25); T[WR] = -3.7 - T[AR]; set3(AL, -1.5, 0, 0.3); T[WL] = 1.2; }
+        if (g === 1 || g === 5) { set3(AR, -2.75 + pump, 0, -0.25); T[WR] = -3.7 - T[AR]; set3(AL, g === 5 ? -1.2 : -1.5, 0, g === 5 ? -0.3 : 0.3); T[WL] = 1.2; }
         else if (g === 3) { set3(AR, -0.9, 0, -0.1); T[WR] = -1.57 - T[AR] + pump; set3(AL, -2.6, 0, 0.3); }
         else { set3(AR, -2.5 + pump, 0, -0.3); T[WR] = -1.15 - T[AR]; set3(AL, -2.4 - pump, 0, 0.35); }
         return;
@@ -311,6 +356,14 @@ export function createCrowdView(scene, game) {
         set3(AR, feint ? -2.6 : -0.95, 0, -0.3); T[WR] = (feint ? -3.3 : -0.85) - T[AR];
         set3(AL, -1.15, 0, 0.22); T[WL] = 1.1;
         set3(TO, 0.16 + br, 0.22 * sd, 0);
+      } else if (g === 5) {                                                           // tower shield square to the front, sword cocked over it
+        const open = game.frame < crowd.openF[i];
+        set3(AR, feint ? -2.6 : -1.75, 0, -0.35); T[WR] = (feint ? -3.3 : -2.4) - T[AR];
+        if (open) set3(AL, -0.25, 0, 0.5); else set3(AL, -1.15, 0, -0.38);
+        set3(TO, 0.24 + br, 0.12, 0);
+      } else if (g === 4) {                                                           // bow low in front, the other hand at the quiver
+        set3(AL, -0.75, 0, -0.08); set3(AR, -0.5, 0, -0.32); T[WR] = 0;
+        set3(TO, 0.08 + br, -0.15 * sd, 0);
       } else if (g === 3) {
         set3(AR, -0.62, 0, -0.08); T[WR] = -1.57 - T[AR] + (feint ? 0.25 * Math.sin(time * 9) : 0);
         set3(AL, -0.8, 0, -0.35);
@@ -333,7 +386,11 @@ export function createCrowdView(scene, game) {
       T[TO + 1] = 0.12 * Math.sin(ph);
     }
     const swing = moving ? Math.min(0.7, 0.2 + v * 0.1) * Math.sin(ph) : 0;
-    if (g === 1) {
+    if (g === 4) {                                                                    // bow carried at the side
+      set3(AL, -0.12 - swing * 0.3, 0, 0.14); set3(AR, -0.2 + swing * 0.5, 0, -0.12); T[WR] = 0;
+    } else if (g === 5) {                                                             // shield carried before him, sword shouldered
+      set3(AL, moving && !form ? -0.9 : -0.55, 0, -0.1); set3(AR, -0.3 + swing * 0.3, 0, -0.12); T[WR] = 0.9 - T[AR];
+    } else if (g === 1) {
       const run = moving && !form;
       set3(AR, run ? -1.0 + swing * 0.3 : -0.15 + swing * 0.5, 0, -0.14); T[WR] = (run ? -1.6 : 0.9) - T[AR];
       set3(AL, run ? -0.85 : -0.35 - swing * 0.5, 0, 0.16); T[WL] = -T[AL];
@@ -349,10 +406,32 @@ export function createCrowdView(scene, game) {
     }
   }
 
+  /** A horseman in the saddle: thighs astride, shins back, leaning into the gallop with the lance couched (upright at
+   *  a stand), the reins in the left hand. */
+  function riderPose(i, v) {
+    const k = Math.min(1, v / 8), bob = Math.sin(time * 7 + i) * 0.02 * k;
+    T.fill(0);
+    set3(TO, 0.12 + 0.2 * k + bob, 0, 0); set3(HE, -0.12 - 0.1 * k, 0, 0);
+    set3(TL, -1.2, 0, 0.5); set3(TR, -1.2, 0, -0.5); T[SL] = T[SR] = 1.35;
+    set3(AR, -0.35 - 0.25 * k, 0, -0.16); T[WR] = (-1.5 + 1.62 * k) - T[AR];
+    set3(AL, -0.9, 0, -0.28);
+  }
+
   /** Full pose targets for soldier i; returns the blend rate (1/s). */
   function pose(i, s, t) {
     const g = GROUP[crowd.kind[i]], sd = side[i];
     const v = Math.hypot(crowd.vx[i], crowd.vz[i]);
+    if (crowd.kind[i] === KIND.RIDER && s <= ST.ATTACK) { riderPose(i, v); return 8; }
+    if (g === 4 && s === ST.ATTACK) {
+      // drawing: side-on, the bow arm out at the target, the string hand pulled back to the chin, held; then the loose
+      stance(i, g, ST.GUARD, 0, 0);
+      set3(TO, 0.04, -0.3, 0); set3(HE, 0, 0.3, 0);
+      set3(AL, -1.52, 0, -0.06);
+      if (t < DRAW) { const u = smooth((t - 4) / 16); set3(AR, -1.5 - 0.38 * u, 0, -0.06 + 0.92 * u); }
+      else set3(AR, -1.25, 0, -0.75);
+      set3(TL, -0.32, 0, 0.18); set3(TR, 0.26, 0, -0.18); T[SL] = 0.28; T[SR] = 0.22;
+      return t < DRAW ? 10 : 30;
+    }
     if (s <= ST.ATTACK) {
       stance(i, g, s, v, crowd.form[i]);
       if (s !== ST.ATTACK) return 12;
@@ -362,14 +441,14 @@ export function createCrowdView(scene, game) {
         // the last 14 sf he trembles at full stretch
         const hot = t >= w - 14, tr = (hot ? Math.sin(t * 2.3) * 0.09 : Math.sin(t * 1.9) * 0.04) * smooth(t / 12);
         if (g === 0) { set3(TO, -0.22, -0.45, 0); set3(HE, -0.2, 0.4, 0); set3(AR, -2.75, 0, -0.35); T[WR] = -0.2 - T[AR] + tr; set3(AL, -1.9, 0.2, 0.2); }
-        else if (g === 1) { set3(TO, -0.24, 0.3, 0); set3(AR, -3.0, 0, -0.2); T[WR] = -4.0 - T[AR] + tr; set3(AL, -1.35, 0, 0.3); T[WL] = 1.2; }
+        else if (g === 1 || g === 5) { set3(TO, -0.24, 0.3, 0); set3(AR, -3.0, 0, -0.2); T[WR] = -4.0 - T[AR] + tr; set3(AL, g === 5 ? -1.1 : -1.35, 0, g === 5 ? -0.35 : 0.3); T[WL] = 1.2; }
         else { set3(TO, -0.24, -0.55, 0); set3(HE, -0.1, 0.45, 0); set3(AR, -2.7, 0, -0.5); T[WR] = -3.4 - T[AR] + tr; set3(AL, -2.4, 0, 0.45); }
         set3(TL, -0.62, 0, 0.18); set3(TR, 0.45, 0, -0.18); T[SL] = 0.75; T[SR] = 0.5;
         return 9;
       }
       if (t < w + 10) {                                                               // strike + lunge
         if (g === 0) { set3(TO, 0.36, 0.35, 0); set3(AR, -1.4, 0, -0.08); T[WR] = -0.04 - T[AR]; set3(AL, -1.45, 0, -0.2); }
-        else if (g === 1) { set3(TO, 0.42, -0.12, 0); set3(AR, -0.62, 0, -0.1); T[WR] = 0.62 - T[AR]; set3(AL, -0.8, 0, 0.3); T[WL] = 0.8; }
+        else if (g === 1 || g === 5) { set3(TO, 0.42, -0.12, 0); set3(AR, -0.62, 0, -0.1); T[WR] = 0.62 - T[AR]; set3(AL, g === 5 ? -1.25 : -0.8, 0, g === 5 ? -0.3 : 0.3); T[WL] = 0.8; }
         else { set3(TO, 0.36, 0.55, 0); set3(AR, -0.9, 0, 0.25); T[WR] = 0.35 - T[AR]; set3(AL, -0.8, 0, -0.3); }
         set3(TL, -0.85, 0, 0.12); set3(TR, 0.55, 0, -0.12); T[SL] = 0.9; T[SR] = 0.12;
         return 42;
@@ -415,19 +494,26 @@ export function createCrowdView(scene, game) {
   };
   // Instances are packed per frame; every write is also recorded per soldier so a standing soldier can be replayed
   // (copied) on most frames instead of recomputed.
-  const REC = 16, recMesh = new Array(N * REC), recMat = new Float32Array(N * REC * 16), recCol = new Float32Array(N * REC * 3), recN = new Uint8Array(N);
-  let recI = 0;
+  // (a rider writes up to ~26 parts with his horse; `recOn` false: loose horses and arrows, never replayed)
+  const REC = 30, recMesh = new Array(N * REC), recMat = new Float32Array(N * REC * 16), recCol = new Float32Array(N * REC * 3), recN = new Uint8Array(N);
+  let recI = 0, recOn = true;
   const push = (m, mat, col) => {
-    const n = m.count++, r = recI * REC + recN[recI]++;
-    mat.toArray(m.instanceMatrix.array, n * 16); mat.toArray(recMat, r * 16); recMesh[r] = m;
-    if (col) { col.toArray(m.instanceColor.array, n * 3); col.toArray(recCol, r * 3); }
-    else { m.instanceColor.array.fill(1, n * 3, n * 3 + 3); recCol.fill(1, r * 3, r * 3 + 3); }
+    if (m.count >= m.count0) return;                         // full (never in normal play): drop the part, not the frame
+    const n = m.count++;
+    mat.toArray(m.instanceMatrix.array, n * 16);
+    if (col) col.toArray(m.instanceColor.array, n * 3); else m.instanceColor.array.fill(1, n * 3, n * 3 + 3);
     const h = m.geometry.attributes.aHit;                    // hit-impact: glow of the soldier being written
     if (h) h.array.set(_g, n * 3);
+    if (!recOn || recN[recI] >= REC) return;
+    const r = recI * REC + recN[recI]++;
+    mat.toArray(recMat, r * 16); recMesh[r] = m;
+    if (col) col.toArray(recCol, r * 3); else recCol.fill(1, r * 3, r * 3 + 3);
   };
   const replay = (i) => {
     for (let k = 0; k < recN[i]; k++) {
-      const r = i * REC + k, m = recMesh[r], n = m.count++;
+      const r = i * REC + k, m = recMesh[r];
+      if (m.count >= m.count0) continue;
+      const n = m.count++;
       m.instanceMatrix.array.set(recMat.subarray(r * 16, r * 16 + 16), n * 16);
       m.instanceColor.array.set(recCol.subarray(r * 3, r * 3 + 3), n * 3);
       const h = m.geometry.attributes.aHit;                  // replayed soldiers are never flashing
@@ -435,6 +521,43 @@ export function createCrowdView(scene, game) {
     }
   };
   let frameNo = 0;
+  const loosePh = new Map();                                 // loose horse id → stride phase (render-side)
+
+  // ---- world-space helpers for the hand-held arms (bows, strings, arrows, tower shields) and the horses
+  const _hL = new THREE.Vector3(), _hR = new THREE.Vector3(), _tA = new THREE.Vector3(), _tB = new THREE.Vector3(), _tip = new THREE.Vector3();
+  const _dx = new THREE.Vector3(), _dy = new THREE.Vector3(), _dz = new THREE.Vector3(), _UP = new THREE.Vector3(0, 1, 0);
+  const hand = (out, arm) => out.set(0, -J.hand, 0).applyMatrix4(arm);
+  /** out = a frame at p, +Z along unit z, +Y as near world up as it can be, uniform scale k. */
+  function frame(out, z, p, k) {
+    _dy.copy(_UP).addScaledVector(z, -_UP.dot(z));
+    if (_dy.lengthSq() < 1e-6) _dy.set(1, 0, 0);
+    _dy.normalize(); _dx.crossVectors(_dy, z);
+    return out.makeBasis(_dx.multiplyScalar(k), _dy.multiplyScalar(k), _v.copy(z).multiplyScalar(k)).setPosition(p);
+  }
+  const _seg = new THREE.Matrix4(), _sd = new THREE.Vector3();
+  /** A unit +Z part (bow string) stretched from a to b. */
+  function segment(mesh, a, bb) {
+    _sd.subVectors(bb, a); const len = _sd.length() || 1e-4;
+    frame(_seg, _sd.divideScalar(len), a, 1);
+    _seg.scale(_v.set(1, 1, len)); push(mesh, _seg, null);
+  }
+  // horses: one gait record, the stage army's colour on the tack, coat / hair tints
+  const GA = {}, ARMY = new THREE.Color(STAGE.enemy.band ?? GRUNT.band), STEED_TACK = new THREE.Color(STEED[1]), _coat = new THREE.Color(), _hair = new THREE.Color();
+  const _hr = new THREE.Matrix4(), _hp = new THREE.Matrix4(), _hu = new THREE.Matrix4();
+  /** A horse at (x, z) heading yaw in the gait last written to GA; coat = [coat, hair] tints, tack: Color. */
+  function horse(x, z, yaw, coat, tack) {
+    const D = HORSE_DIM;
+    _coat.setRGB(coat[0][0], coat[0][1], coat[0][2], THREE.SRGBColorSpace); _hair.setRGB(coat[1][0], coat[1][1], coat[1][2], THREE.SRGBColorSpace);
+    _hr.makeRotationFromEuler(_e.set(GA.pitch, yaw, 0)).setPosition(x, D.bodyY + GA.bob, z);
+    push(HM.body, _hr, _coat); push(HM.tack, _hr, tack);
+    local(_hp, _hr, D.neck[0], D.neck[1], D.neck[2], GA.neck, 0, 0); push(HM.head, _hp, _coat); push(HM.mane, _hp, _hair);
+    for (let L = 0; L < 4; L++) {
+      const j = D.legs[L];
+      local(_hu, _hr, j[0], j[1], j[2], GA.leg[L][0], 0, 0); push(HM.upper, _hu, _coat);
+      push(HM.lower, local(_hp, _hu, 0, -D.upper, 0, GA.leg[L][1], 0, 0), _coat);
+    }
+    push(HM.tail, local(_hp, _hr, D.tail[0], D.tail[1], D.tail[2], GA.tail, GA.swish, 0), _hair);
+  }
 
   function write(i, s, dt) {
     const t = crowd.stT[i], o = i * NCH, officer = crowd.type[i] === 1, kind = crowd.kind[i], g = GROUP[kind];
@@ -445,8 +568,15 @@ export function createCrowdView(scene, game) {
     // pelvis height from the legs (bent knees lower the body; lying overrides)
     const pel = -J.hipY + Math.max(legH(C[TL], C[SL], C[TL + 2]), legH(C[TR], C[SR], C[TR + 2]));
     const sc = (officer ? 1.16 : kind === KIND.CAPTAIN ? 1.06 : 1) * size[i];
-    const rx = crowd.rx[i];
+    let rx = crowd.rx[i];
     let y = crowd.y[i] + pel * sc;
+    const riding = kind === KIND.RIDER && s <= ST.ATTACK;
+    if (riding) {                                            // in the saddle: the horse's gait carries him
+      const v = Math.hypot(crowd.vx[i], crowd.vz[i]);
+      hph[i] = (hph[i] + strideHz(v) * 2 * Math.PI * dt) % (Math.PI * 64);
+      gait(hph[i], v, GA);
+      y = HORSE_DIM.bodyY + GA.bob + HORSE_DIM.seat; rx = GA.pitch * 0.6;
+    }
     if (s >= ST.AIR && s <= ST.DEAD) {
       // hit-impact: lower the pivot by how horizontal the body is (on its back or face down, in the air too), so a
       // tumbling body touches the ground continuously instead of snapping down when it lands
@@ -455,7 +585,7 @@ export function createCrowdView(scene, game) {
       if (s === ST.DEAD && t > CROWD.deadTime - 50) y -= (t - (CROWD.deadTime - 50)) / 50 * 0.5;
     }
     const shake = crowd.hs[i] > 0 ? Math.sin(crowd.hs[i] * 2.7) * 0.05 : 0;
-    _root.makeRotationFromEuler(_e.set(rx, crowd.yaw[i], 0)).setPosition(crowd.x[i] + shake, y, crowd.z[i]);
+    _root.makeRotationFromEuler(_e.set(rx, crowd.yaw[i], 0)).setPosition(crowd.x[i] + shake, y, crowd.z[i]);   // (riders: rx = the horse's rock)
     _root.multiply(_s.makeScale(sc, sc, sc));
     // colour: per-soldier tint; the hit flash is an emissive glow (hit-impact, src/combat/hitfx.js)
     const f = tint[i], cap = kind === KIND.CAPTAIN;
@@ -479,18 +609,48 @@ export function createCrowdView(scene, game) {
     // weapons
     _g[0] = _g[1] = _g[2] = 0;                               // hit-impact: the victim tint is body-only (DW keeps weapons neutral)
     local(mW, mArmR, 0, -J.hand, 0, C[WR], C[WR + 1], C[WR + 2]);
-    const wm = g === 0 ? M.spear : g === 1 ? M.sword : g === 2 ? M.glaive : M.pole;
-    push(wm, mW, _c);
+    if (g < 4 || g === 5) {
+      const wm = g === 0 ? M.spear : g === 1 || g === 5 ? M.sword : g === 2 ? M.glaive : M.pole;
+      push(wm, mW, _c);
+    }
     if (g === 3) push(M.flag, mW, null);
     if (g === 1) push(M.shield, local(mOut, mArmL, 0, -J.hand, 0, C[WL], C[WL + 1], C[WL + 2]), _c);
+    const yawT = crowd.yaw[i] + C[TO + 1];                   // where his chest faces
+    let tipAt = null;                                        // telegraph point (bows: the arrow's head)
+    if (g === 5) {                                           // tower shield: square to the front from the left hand, swung aside when broken
+      const open = game.frame < crowd.openF[i];
+      hand(_hL, mArmL); _dz.set(Math.sin(yawT + (open ? 1.25 : 0.05)), open ? -0.35 : 0.06, Math.cos(yawT + (open ? 1.25 : 0.05))).normalize();
+      frame(mOut, _dz, _hL.addScaledVector(_dz, 0.07 * sc), sc); push(M.tshield, mOut, _c);
+    } else if (g === 4) {                                    // bow in the left hand, quiver on the back, the draw
+      push(M.quiver, mTorso, _c);
+      hand(_hL, mArmL); hand(_hR, mArmR);
+      const drawn = s === ST.ATTACK && t >= 6 && t < DRAW;
+      if (s === ST.ATTACK && t < DRAW + 6) _dz.subVectors(_hL, _hR).setY(0);
+      else _dz.set(Math.sin(yawT + 0.25), 0, Math.cos(yawT + 0.25));
+      _dz.normalize();
+      frame(mOut, _dz, _hL, sc); push(M.bow, mOut, _c);
+      _tA.set(0, 0.6, -0.36).applyMatrix4(mOut); _tB.set(0, -0.6, -0.36).applyMatrix4(mOut);
+      if (drawn) {
+        segment(M.string, _tA, _hR); segment(M.string, _hR, _tB);
+        _dz.subVectors(_hL, _hR).normalize();
+        frame(mOut, _dz, _hR, sc); push(M.nocked, mOut, _c);
+        tipAt = _tip.copy(_hR).addScaledVector(_dz, 0.84 * sc);
+      } else segment(M.string, _tA, _tB);
+    }
     // telegraph: pixel-star glint on the weapon tip through the wind-up (drawn over the crowd); a real blow flares it
-    // into a big solid red pixel star (white core) for the last 14 sf
-    if (s === ST.ATTACK && t >= 3 && t < CROWD.windup && M.glint.count < 32) {
-      const pulse = hotStrike ? 0.46 + 0.16 * Math.abs(Math.sin(t * 0.9)) : 0.2 + 0.12 * Math.abs(Math.sin(t * 0.33)) + (t < 10 ? (10 - t) * 0.025 : 0);
+    // into a big solid red pixel star (white core) for the last 14 sf (bows: through the draw, red before the loose)
+    const wind = g === 4 ? DRAW : CROWD.windup;
+    if (s === ST.ATTACK && t >= 3 && t < wind && M.glint.count < 32 && (g !== 4 || tipAt)) {
+      const hot = g === 4 ? t >= DRAW - 14 : hotStrike;
+      const pulse = hot ? 0.46 + 0.16 * Math.abs(Math.sin(t * 0.9)) : 0.2 + 0.12 * Math.abs(Math.sin(t * 0.33)) + (t < 10 ? (10 - t) * 0.025 : 0);
       _tmp.makeRotationFromEuler(_e.set(t * 0.07, t * 0.11, 0.6)).scale(_v.set(pulse, pulse, pulse));
-      _tmp.setPosition(_v.set(0, 0, TIP[g]).applyMatrix4(mW));
-      if (hotStrike) { push(M.flare, _tmp, null); _tmp.scale(_v.set(0.45, 0.45, 0.45)); }
+      _tmp.setPosition(tipAt || _v.set(0, 0, TIP[g]).applyMatrix4(mW));
+      if (hot) { push(M.flare, _tmp, null); _tmp.scale(_v.set(0.45, 0.45, 0.45)); }
       push(M.glint, _tmp, _glintCold);
+    }
+    if (riding) {
+      const coat = COATS[FIELD_COATS[Math.floor(h01(i, 5) * FIELD_COATS.length)]];
+      horse(crowd.x[i], crowd.z[i], crowd.yaw[i], coat, ARMY);
     }
     // hud part (r4): inside game.hudTagR (set by the HUD) the HUD's ▼▼ name/HP tag marks the officer; skip the 3D ▼
     if (officer && s !== ST.DEAD && !((crowd.x[i] - game.hero.x) ** 2 + (crowd.z[i] - game.hero.z) ** 2 < (game.hudTagR || 0) ** 2)) {
@@ -514,6 +674,29 @@ export function createCrowdView(scene, game) {
         if (s === ST.IDLE && seen[i] && crowd.type[i] === 0 && !crowd.flash[i] && ((frameNo + i) & 3)) replay(i);
         else write(i, s, (s === ST.IDLE ? 4 : 1) * dt);
       }
+      // loose horses (horse/horses.js) and arrows (crowd.arrows): drawn every frame, never replayed
+      recOn = false; _g[0] = _g[1] = _g[2] = 0;
+      for (const m of game.horses?.list || []) {
+        if (lensSide(N + (m.id % 64), m.x, m.z, 0)) continue;
+        const ph = ((loosePh.get(m.id) || 0) + strideHz(m.v) * 2 * Math.PI * dt) % (Math.PI * 64);
+        loosePh.set(m.id, ph);
+        gait(ph, m.v, GA);
+        horse(m.x, m.z, m.yaw, COATS[m.coat], ARMY);
+      }
+      if (frameNo % 600 === 0) for (const id of loosePh.keys()) if (!game.horses?.list.some((m) => m.id === id)) loosePh.delete(id);
+      const hero = game.hero;
+      if (hero.riding) {                                    // his horse under him (hero/mount.js; the stride is sim state)
+        gait(hero.horsePh, hero.speed, GA);
+        horse(hero.x, hero.z, hero.yaw, COATS[hero.steed] || COATS.bay, hero.steedOwn ? STEED_TACK : ARMY);
+      }
+      for (const a of crowd.arrows) {
+        const vh = Math.hypot(a.vx, a.vz);
+        _tmp.makeRotationFromEuler(_e.set(-Math.atan2(a.vy, vh), Math.atan2(a.vx, a.vz), 0));
+        _v.set(0, 0, a.stuck ? -0.62 : -0.42).applyMatrix4(_tmp);                   // centred in flight; the head buried when stuck
+        _tmp.setPosition(a.x + _v.x, a.y + _v.y, a.z + _v.z);
+        push(M.arrow, _tmp, null);
+      }
+      recOn = true;
       for (const m of meshes) {
         m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
         if (m.geometry.attributes.aHit) m.geometry.attributes.aHit.needsUpdate = true;

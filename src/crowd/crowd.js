@@ -16,6 +16,14 @@
 //  · Reinforcements: while the ring is under strength and no block waits nearer, a column of 8-15 (with its bearer)
 //    spawns 16-26 m out in front of the camera and runs in; `crowd:wave` announces it. Waves only run once a scenario
 //    spawned an army or a ring.
+//  · Arms (兵種): squads come as plain foot (spear, sword + buckler), a shield wall (大盾兵 in the front rank: a light
+//    blow from the front clanks off; charge attacks, finishers and the Musou break it — combat.js) or a line of bows
+//    (弓兵: they break ranks at bow range, keep 10-15 m off the hero, fall back when he closes in, and loose a few
+//    arrows at a time — each a 0.8 s draw with a glint — that he can roll through or cut out of the air with a swing).
+//    Horsemen (騎兵) ride free in troops: gallop passes through the hero that run him down if he stands in the way,
+//    wheel round, come again; light blows glance off a rider, a heavy one, a charge attack or the Musou unhorses him
+//    (he fights on foot, the horse runs loose — horse/horses.js). Troops raid from the haze every so often
+//    (STAGE.enemy.cavalry).
 // Reaction states (HURT..GETUP) are driven by src/combat; this module owns the rest.
 import { rng } from '../core/rng.js';
 import { emit } from '../core/events.js';
@@ -29,13 +37,18 @@ import { HERO } from '../heroes/index.js';
 const NAMES = () => STAGE.enemy.officers.map((o, i) => (i === 3 && STAGE.enemy.swap?.[HERO.id]) || o);
 // far limit of the field: the castle wall, or the near bank where a river crosses the field (赤壁)
 const WALL_Z = SET === 'river' ? RIVER.z0 + 2 : SET === 'flood' ? LEVEE.z0 + 0.5 : WALL;
+export const FAR_Z = WALL_Z;
 
 export const ST = { OFF: 0, IDLE: 1, ADVANCE: 2, GUARD: 3, ATTACK: 4, HURT: 5, KNOCK: 6, AIR: 7, DOWN: 8, GETUP: 9, DEAD: 10 };
 export const isReacting = (s) => s >= ST.HURT && s <= ST.GETUP;
 export const isAlive = (s) => s !== ST.OFF && s !== ST.DEAD;
 /** Visual/role kind (type stays 0 grunt / 1 officer for combat). */
-export const KIND = { SPEAR: 0, SWORD: 1, CAPTAIN: 2, BEARER: 3, OFFICER: 4 };
+export const KIND = { SPEAR: 0, SWORD: 1, CAPTAIN: 2, BEARER: 3, OFFICER: 4, ARCHER: 5, SHIELD: 6, RIDER: 7 };
 const SQ_HOLD = 1, SQ_MARCH = 2, SQ_HALT = 3, SQ_CHARGE = 4;
+/** Squad make-up: plain foot, a shield wall in the front rank, a line of bows. */
+export const MIX = { FOOT: 0, SHIELD: 1, ARCHER: 2 };
+/** Soldiers outside the melee ring: standard-bearers, bows, horsemen (no ring seat, no strike token, no war cry). */
+const offRing = (k) => k === KIND.BEARER || k === KIND.ARCHER || k === KIND.RIDER;
 
 export const CROWD = {
   officers: 4,
@@ -52,6 +65,16 @@ export const CROWD = {
   engaged: 84, transit: 72,                                   // director target: soldiers on the hero; cap on blocks en route
   halt: 15, haltFrames: 36, fold: 7.5,                        // squad: halt at 15 m, then charge, fold at 7.5 m
   wave: [8, 15], waveEvery: [45, 110], waveDist: [16, 26],   // columns every 0.75 s below half strength, else 1.8 s
+  mix: { shield: 0.25, archer: 0.12 },                        // share of squads that are a shield wall / a line of bows
+  // 弓兵: range kept (m), back off inside `flee`, a 0.8 s draw, own cooldown, the volley clock (next draw anywhere),
+  // at most `max` drawing at once; arrows fly at `speed` m/s (horizontal) with gravity g and lead a running hero by half
+  archer: { hp: 26, aggro: 18, range: [10, 15], flee: 5.5, draw: 48, cd: [150, 270], gap: [34, 72], max: 2, fold: 20,
+    speed: 24, g: 14, lead: 0.5, spread: 0.7, dmg: 5, stick: 150, pool: 48 },
+  shield: { hp: 48, cone: 1.0, breakN: 3, open: 120 },        // 大盾兵: front cone (rad), the block that breaks it, open (sf)
+  // 騎兵: passes through the hero `past` m beyond him, the hit when one runs him down, the pause before the next can;
+  // troops of `size` raid every `every` sf (STAGE.enemy.cavalry overrides), at most `cap` riding at once
+  rider: { hp: 110, aggro: 34, speed: 10.5, turn: 2.4, past: 14, reach: 1.5, dmg: 14, cd: 70, r: 0.85,
+    troops: 1, every: 3000, size: [3, 4], cap: 10 },
 };
 const DT = 1 / 60;
 const CELL = 1.2, GRID = 128, HALF = GRID * CELL / 2;
@@ -67,13 +90,19 @@ export function createCrowd(game, grunts = 300) {
     rx: F(), rxV: F(), spinV: F(), pref: F(), band: I(), aggro: F(), phase: F(), hurtDur: I(), bounce: I(),
     lastHit: I(), strafe: F(), kod: I(), tokT: I(), ang: F(), seated: I(),
     squad: I(), slotX: F(), slotZ: F(), form: I(),
-    sq: { x: F(MAXSQ), z: F(MAXSQ), face: F(MAXSQ), st: I(MAXSQ), t: I(MAXSQ), base: I(MAXSQ), n: 0 },   // base: k + 1 for a camp's garrison
+    sq: { x: F(MAXSQ), z: F(MAXSQ), face: F(MAXSQ), st: I(MAXSQ), t: I(MAXSQ), base: I(MAXSQ), mix: I(MAXSQ), n: 0 },   // base: k + 1 for a camp's garrison
     raiseF: I(), feint: I(), wind: I(),                         // raiseF: rallying until (render + ring surge); feint strike; winding up
     armorF: I(),                                                // officers: armoured (no stagger) until this frame (combat breakout)
     frozen: I(),                                                // frames left frozen solid (冰 weapons, combat.js): no AI, no reaction
+    openF: I(),                                                 // 大盾兵: shield knocked aside until this frame (combat.js)
+    wx: F(), wz: F(),                                           // 騎兵: the far end of the pass he is riding
     waveT: 0, tokensUsed: 0, strikeF: 0, gap: 0, graceF: 0, heroHp: 0, wavesOn: false, engaged: 0,
+    arrowF: 0, raidF: 0,                                        // next draw allowed anywhere on the field / next cavalry raid
+    arrows: [],                                                 // { x, y, z, vx, vy, vz, t, life, stuck } in flight or stuck in the ground
     names: NAMES(),
   };
+  const CAV = { ...CROWD.rider, ...(STAGE.enemy.cavalry || {}) }, MIXW = { ...CROWD.mix, ...(STAGE.enemy.mix || {}) };
+  const MV = new Float64Array(2);                               // archer / rider steering out
   const head = new Int32Array(GRID * GRID), next = new Int32Array(N);
   const scripted = () => !!game.campaign?.active;
   const px = new Float64Array(N), pz = new Float64Array(N), sqAlive = new Int32Array(MAXSQ);
@@ -85,14 +114,17 @@ export function createCrowd(game, grunts = 300) {
     c.x[i] = x; c.z[i] = Math.min(z, WALL_Z - 2.5); c.y[i] = 0; c.vx[i] = c.vz[i] = c.vy[i] = 0;
     c.yaw[i] = Math.atan2(game.hero.x - x, game.hero.z - z);
     c.type[i] = off ? 1 : 0; c.kind[i] = kind;
-    c.hpMax[i] = c.hp[i] = off ? CROWD.officerHp * (game.diff?.hp ?? 1) : kind === KIND.CAPTAIN ? CROWD.captainHp : CROWD.hp;
+    c.hpMax[i] = c.hp[i] = off ? CROWD.officerHp * (game.diff?.hp ?? 1) : kind === KIND.CAPTAIN ? CROWD.captainHp
+      : kind === KIND.ARCHER ? CROWD.archer.hp : kind === KIND.SHIELD ? CROWD.shield.hp : kind === KIND.RIDER ? CAV.hp : CROWD.hp;
     c.st[i] = engaged ? ST.ADVANCE : ST.IDLE; c.stT[i] = rng.int(0, 60);
-    c.token[i] = 0; c.cd[i] = rng.int(0, 120); c.hs[i] = 0; c.flash[i] = 0; c.raiseF[i] = 0; c.feint[i] = 0; c.wind[i] = 0; c.armorF[i] = 0; c.frozen[i] = 0;
+    c.token[i] = 0; c.cd[i] = rng.int(0, 120); c.hs[i] = 0; c.flash[i] = 0; c.raiseF[i] = 0; c.feint[i] = 0; c.wind[i] = 0; c.armorF[i] = 0; c.frozen[i] = 0; c.openF[i] = 0;
     c.rx[i] = c.rxV[i] = c.spinV[i] = 0; c.bounce[i] = 0; c.lastHit[i] = -1; c.kod[i] = 0;
     const r = rng.next();
     if (kind === KIND.BEARER) { c.band[i] = 2; c.pref[i] = rng.range(7, 11); }
+    else if (kind === KIND.ARCHER) { c.band[i] = 2; c.pref[i] = rng.range(CROWD.archer.range[0], CROWD.archer.range[1]); c.seated[i] = 0; }
+    else if (kind === KIND.RIDER) { c.band[i] = 2; c.pref[i] = 0; c.seated[i] = 0; c.wx[i] = x; c.wz[i] = z; }
     else setBand(i, off ? 0 : r < CROWD.share[0] ? 0 : r < CROWD.share[1] ? 1 : 2);
-    c.aggro[i] = off ? CROWD.officerAggro : CROWD.aggro;
+    c.aggro[i] = off ? CROWD.officerAggro : kind === KIND.ARCHER ? CROWD.archer.aggro : kind === KIND.RIDER ? CAV.aggro : CROWD.aggro;
     c.phase[i] = rng.range(0, 6.28);
     c.strafe[i] = rng.chance(0.5) ? 1 : -1;
     c.squad[i] = -1; c.form[i] = 0;
@@ -103,6 +135,7 @@ export function createCrowd(game, grunts = 300) {
   c.reset = () => {
     c.names = NAMES();
     c.st.fill(ST.OFF); c.token.fill(0); c.tokensUsed = 0; c.strikeF = 0; c.gap = 0; c.graceF = 0; c.heroHp = game.hero.hp; c.waveT = 0; c.sq.n = 0; c.wavesOn = false;
+    c.arrows.length = 0; c.arrowF = 0; c.raidF = game.frame + 3600;   // the first cavalry raid a minute in
   };
 
   function freeSlots(officer) {
@@ -113,22 +146,23 @@ export function createCrowd(game, grunts = 300) {
   }
 
   /** New squad at (sx, sz) facing `face`; members fill a block `cols` wide, 1.15 m apart; bearer ahead, captain on
-   *  the front-left. Returns the squad id (or -1 when the table is full). */
-  function makeSquad(slots, sx, sz, face, cols, st) {
+   *  the front-left (`plain`: neither, every man of the mix). `mix` (MIX): plain foot, a shield wall in the front rank,
+   *  a line of bows. Returns the squad id (or -1 when the table is full). */
+  function makeSquad(slots, sx, sz, face, cols, st, mix = MIX.FOOT, plain = false) {
     let q = -1;
     for (let k = 0; k < c.sq.n; k++) if (!c.sq.st[k]) { q = k; break; }
     if (q < 0) { if (c.sq.n >= MAXSQ) return -1; q = c.sq.n++; }
-    c.sq.x[q] = sx; c.sq.z[q] = sz; c.sq.face[q] = face; c.sq.st[q] = st; c.sq.t[q] = 0; c.sq.base[q] = 0;
-    const sn = Math.sin(face), cs = Math.cos(face);
-    const rows = Math.ceil((slots.length - 1) / cols);
+    c.sq.x[q] = sx; c.sq.z[q] = sz; c.sq.face[q] = face; c.sq.st[q] = st; c.sq.t[q] = 0; c.sq.base[q] = 0; c.sq.mix[q] = mix;
+    const sn = Math.sin(face), cs = Math.cos(face), k0 = plain ? 0 : 1;
+    const rows = Math.ceil((slots.length - k0) / cols);
     slots.forEach((i, k) => {
       let lx, lz, kind;
-      if (k === 0) { lx = 0; lz = 1.5; kind = KIND.BEARER; }
+      if (k < k0) { lx = 0; lz = 1.5; kind = KIND.BEARER; }
       else {
-        const m = k - 1, r = Math.floor(m / cols), q2 = m % cols;
+        const m = k - k0, r = Math.floor(m / cols), q2 = m % cols;
         lx = (q2 - (cols - 1) / 2) * 1.15 + rng.range(-0.12, 0.12); lz = -r * 1.15 + rng.range(-0.12, 0.12) + (rows - 1) * 0.3;
-        kind = m === 0 ? KIND.CAPTAIN : gruntKind();
-        if (kind === KIND.CAPTAIN && m !== 0) kind = KIND.SPEAR;
+        kind = m === 0 && !plain ? KIND.CAPTAIN : mix === MIX.ARCHER ? KIND.ARCHER : mix === MIX.SHIELD && r === 0 ? KIND.SHIELD : gruntKind();
+        if (kind === KIND.CAPTAIN && (m !== 0 || plain)) kind = KIND.SPEAR;
       }
       place(i, sx + lx * cs + lz * sn, sz - lx * sn + lz * cs, false, kind);
       c.squad[i] = q; c.slotX[i] = lx; c.slotZ[i] = lz; c.form[i] = 1;
@@ -144,7 +178,8 @@ export function createCrowd(game, grunts = 300) {
     c.wavesOn = true;
     const g0 = freeSlots(false).length;
     game.bases?.garrison();                                    // the camps' garrisons first (stages/bases.js)
-    const slots = freeSlots(false).slice(0, Math.max(0, count - (g0 - freeSlots(false).length)));
+    const cav = Math.min(CAV.troops * CAV.size[1], Math.floor(count / 20));   // slots kept for the cavalry troops
+    const slots = freeSlots(false).slice(0, Math.max(0, count - (g0 - freeSlots(false).length) - cav));
     const fwd = game.cam.yaw;
     let k = 0, n = 0;
     while (k < slots.length) {
@@ -155,8 +190,16 @@ export function createCrowd(game, grunts = 300) {
       let sx = cx + Math.sin(a) * d, sz = cz + Math.cos(a) * d;
       sz = Math.min(sz, WALL_Z - 6);
       const face = Math.atan2(cx - sx, cz - sz);
-      makeSquad(slots.slice(k, k + size), sx, sz, face, big ? 10 : Math.max(4, Math.round(Math.sqrt(size * 1.6))), SQ_HOLD);
+      makeSquad(slots.slice(k, k + size), sx, sz, face, big ? 10 : Math.max(4, Math.round(Math.sqrt(size * 1.6))), SQ_HOLD, big ? MIX.SHIELD : pickMix());
       k += size; n++;
+    }
+    // cavalry troops waiting further out (they ride when he comes within their aggro)
+    for (let t = 0; t < CAV.troops; t++) {
+      const a = fwd + rng.range(-2.2, 2.2), d = rng.range(32, 46) * Math.sqrt(K);
+      let sx = cx + Math.sin(a) * d, sz = cz + Math.cos(a) * d;
+      const r = Math.hypot(sx, sz), lim = CROWD.fieldR - 22;
+      if (r > lim) { sx *= lim / r; sz *= lim / r; }
+      c.spawnRiders(rng.int(CAV.size[0], CAV.size[1]), sx, Math.min(sz, WALL_Z - 8), false);
     }
     if (scripted()) return;                                     // a stage script brings the named officers on itself
     for (const i of freeSlots(true)) {
@@ -165,14 +208,37 @@ export function createCrowd(game, grunts = 300) {
     }
   };
 
-  /** Camp k's garrison: a block of n standing at (x, z), facing the middle of the field; the director leaves it be (it
-   *  charges when the hero walks into it). */
+  /** Camp k's garrison: a shield wall of n standing at (x, z), facing the middle of the field, with a few bows behind
+   *  it; the director leaves them be (they come out when the hero walks into the camp). */
   c.spawnGarrison = (k, x, z, n) => {
     const slots = freeSlots(false).slice(0, n);
     if (slots.length < 3) return;
-    const q = makeSquad(slots, x, z, Math.atan2(-x, -z), 4, SQ_HOLD);
+    const face = Math.atan2(-x, -z), na = slots.length >= 12 ? 4 : 0;
+    const q = makeSquad(slots.slice(0, slots.length - na), x, z, face, 4, SQ_HOLD, MIX.SHIELD);
     if (q >= 0) c.sq.base[q] = k + 1;
+    if (na) {
+      const q2 = makeSquad(slots.slice(-na), x - Math.sin(face) * 4.5, z - Math.cos(face) * 4.5, face, na, SQ_HOLD, MIX.ARCHER, true);
+      if (q2 >= 0) c.sq.base[q2] = k + 1;
+    }
   };
+  /** A troop of n horsemen at (x, z): free riders who wait for the hero to come within their aggro (`engaged`: they
+   *  ride at once — a raid). Returns how many came. */
+  c.spawnRiders = (n, x, z, engaged) => {
+    let riding = 0;
+    for (let i = 0; i < grunts; i++) if (c.kind[i] === KIND.RIDER && isAlive(c.st[i])) riding++;
+    const slots = freeSlots(false).slice(0, Math.max(0, Math.min(n, CAV.cap - riding)));
+    slots.forEach((i, k) => place(i, x + (k % 2 ? 1.8 : -1.8) * Math.ceil(k / 2), z - k * 1.2, engaged, KIND.RIDER));
+    if (engaged && slots.length) emit('crowd:cavalry', { count: slots.length, x, z });
+    return slots.length;
+  };
+  /** A rider thrown from the saddle fights on foot (sword and buckler); his horse runs loose (horse/horses.js). */
+  c.unhorse = (i) => {
+    const v = Math.hypot(c.vx[i], c.vz[i]);
+    c.kind[i] = KIND.SWORD; c.aggro[i] = CROWD.aggro; setBand(i, 1);
+    game.horses?.free(c.x[i], c.z[i], c.yaw[i], v);
+    emit('rider:fall', { i, x: c.x[i], z: c.z[i], v });
+  };
+  function pickMix() { const r = rng.next(); return r < MIXW.archer ? MIX.ARCHER : r < MIXW.archer + MIXW.shield ? MIX.SHIELD : MIX.FOOT; }
   /** A camp's 據點兵長 steps out at (x, z) with hp (a captain who makes for the hero). Returns his index (-1: no room). */
   c.spawnCaptain = (x, z, hp) => {
     const i = freeSlots(false)[0];
@@ -253,7 +319,8 @@ export function createCrowd(game, grunts = 300) {
     if (h.hp < c.heroHp) c.graceF = game.frame + Math.round(rng.int(CROWD.grace[0], CROWD.grace[1]) * (game.diff?.grace ?? 1));
     c.heroHp = h.hp;
     let strikers = 0;
-    for (let i = 0; i < N; i++) if (c.st[i] === ST.ATTACK && c.stT[i] < CROWD.strike) strikers++;
+    drawing = 0;
+    for (let i = 0; i < N; i++) if (c.st[i] === ST.ATTACK) { if (c.kind[i] === KIND.ARCHER) drawing++; else if (c.stT[i] < CROWD.strike) strikers++; }
     const busy = h.state === 'attack';
     // ---- AI
     for (let i = 0; i < N; i++) {
@@ -269,7 +336,8 @@ export function createCrowd(game, grunts = 300) {
         continue;
       }
       if (isReacting(s)) {
-        if (c.wind[i]) { c.wind[i] = 0; c.strikeF = Math.min(c.strikeF, game.frame - c.gap + 20); }   // swing knocked out of him: next one soon
+        if (c.wind[i] && c.kind[i] !== KIND.ARCHER) c.strikeF = Math.min(c.strikeF, game.frame - c.gap + 20);   // swing knocked out of him: next one soon
+        c.wind[i] = 0;
         releaseToken(i); c.form[i] = 0; continue;
       }
       if (c.cd[i] > 0) c.cd[i]--;
@@ -289,6 +357,10 @@ export function createCrowd(game, grunts = 300) {
       } else if (s === ST.IDLE) {
         if (d < c.aggro[i]) setSt(i, ST.ADVANCE);
         turn(i, face, 1.5);
+      } else if (c.kind[i] === KIND.ARCHER) {
+        archer(i, s, h, d, dx, dz); vx = MV[0]; vz = MV[1];
+      } else if (c.kind[i] === KIND.RIDER) {
+        rider(i, s, h, d, dx, dz); vx = MV[0]; vz = MV[1];
       } else if (s === ST.ATTACK) {
         const t = c.stT[i];
         turn(i, face, t < CROWD.windup - 8 ? CROWD.turn : 0);
@@ -373,6 +445,7 @@ export function createCrowd(game, grunts = 300) {
       c.vx[i] = vx; c.vz[i] = vz;
       c.x[i] += vx * DT; c.z[i] += vz * DT;
       c.phase[i] += Math.hypot(vx, vz) * DT * 3.2;
+      if (c.kind[i] === KIND.RIDER) keepIn(i);                  // riders skip the crowd push (separate), so the field holds them here
     }
     if (!frozen) {
       // a token that doesn't turn into a strike within 3 s goes back to the pool
@@ -381,8 +454,124 @@ export function createCrowd(game, grunts = 300) {
       grantTokens(h);
       separate(h);
       waves(h);
+      raids(h);
+      arrows(h);
     }
   };
+
+  // ---- 弓兵: keep bow range, fall back when he closes in, work round into the camera's view, loose on the volley clock
+  let drawing = 0;
+  function archer(i, s, h, d, dx, dz) {
+    const A = CROWD.archer, face = Math.atan2(dx, dz);
+    MV[0] = MV[1] = 0;
+    if (s === ST.ATTACK) {                                      // drawing: planted, tracking him; the arrow goes at A.draw
+      turn(i, face, CROWD.turn);
+      if (c.stT[i] === A.draw) { c.wind[i] = 0; loose(i, h, d); }
+      if (c.stT[i] >= A.draw + 14) { setSt(i, ST.GUARD); c.cd[i] = rng.int(A.cd[0], A.cd[1]); }
+      return;
+    }
+    const fx = Math.sin(game.cam.yaw), fz = Math.cos(game.cam.yaw), px = -dx / d, pz = -dz / d;
+    const vis = px * fx + pz * fz;                              // 1 = beyond the hero, straight up the view
+    let tx = 0, tz = 0, sp = 0;
+    if (d < A.flee) { tx = px; tz = pz; sp = CROWD.run * 0.85; }                  // he is on us: fall back
+    else if (d > c.pref[i] + 2.5) { tx = -px; tz = -pz; sp = CROWD.run; }         // close to bow range
+    else if (d < c.pref[i] - 2.5) { tx = px; tz = pz; sp = CROWD.walk; }
+    if (vis < -0.2) {                                           // behind the lens: work round to where he can see us
+      let ux = fx - vis * px, uz = fz - vis * pz, ul = Math.hypot(ux, uz);
+      if (ul < 0.2) { ux = pz * c.strafe[i]; uz = -px * c.strafe[i]; ul = 1; }
+      tx += ux / ul; tz += uz / ul; sp = Math.max(sp, CROWD.walk * 1.3);
+    }
+    const tl = Math.hypot(tx, tz);
+    if (sp > 0 && tl > 1e-3) {
+      MV[0] = tx / tl * sp; MV[1] = tz / tl * sp;
+      if (s !== ST.ADVANCE) setSt(i, ST.ADVANCE);
+      turn(i, sp > CROWD.walk + 0.5 ? Math.atan2(MV[0], MV[1]) : face, CROWD.turn);
+    } else {
+      if (s !== ST.GUARD) setSt(i, ST.GUARD);
+      turn(i, face, CROWD.turn);
+    }
+    // the volley clock: a draw starts anywhere on the field every 0.4-1 s (× difficulty), a few at a time, only from
+    // bows he can see (one at a time while the boss duels him)
+    const max = game.boss?.alive() ? 1 : A.max;
+    if (c.cd[i] === 0 && d > A.flee && d < A.range[1] + 7 && vis > -0.3 && drawing < max && game.frame >= c.arrowF && h.state !== 'dead') {
+      setSt(i, ST.ATTACK); c.wind[i] = 1; drawing++;
+      c.arrowF = game.frame + Math.round(rng.int(A.gap[0], A.gap[1]) * (game.diff?.gap ?? 1));
+    }
+  }
+  /** The arrow leaves the bow: aimed where he will be (half the lead), with a little scatter. */
+  function loose(i, h, d) {
+    const A = CROWD.archer, y0 = 1.45;
+    const sx = c.x[i] + Math.sin(c.yaw[i]) * 0.45, sz = c.z[i] + Math.cos(c.yaw[i]) * 0.45, T0 = d / A.speed;
+    const tx = h.x + h.vx * T0 * A.lead + rng.range(-A.spread, A.spread), tz = h.z + h.vz * T0 * A.lead + rng.range(-A.spread, A.spread);
+    const ex = tx - sx, ez = tz - sz, T = Math.max(0.2, Math.hypot(ex, ez) / A.speed), ty = h.y + 1.05;
+    if (c.arrows.length >= A.pool) c.arrows.shift();
+    c.arrows.push({ x: sx, y: y0, z: sz, vx: ex / T, vy: (ty - y0 + 0.5 * A.g * T * T) / T, vz: ez / T, t: 0, life: Math.ceil(T * 60) + 50, stuck: 0 });
+    emit('arrow:loose', { i, x: sx, y: y0, z: sz });
+  }
+  /** Arrows in flight: one that reaches him stings (no stagger; a roll or the Musou lets it through), one he swings into
+   *  from the front is cut out of the air; the rest stick in the ground a while. */
+  function arrows(h) {
+    const A = CROWD.archer, L = c.arrows, hs = Math.sin(h.yaw), hc = Math.cos(h.yaw);
+    for (let k = L.length - 1; k >= 0; k--) {
+      const a = L[k];
+      a.t++;
+      if (a.stuck) { if (a.t > A.stick) L.splice(k, 1); continue; }
+      a.vy -= A.g * DT; a.x += a.vx * DT; a.y += a.vy * DT; a.z += a.vz * DT;
+      const ex = a.x - h.x, ez = a.z - h.z;
+      if (ex * ex + ez * ez < 0.2 && a.y > h.y + 0.1 && a.y < h.y + 1.9 && h.state !== 'dead') {
+        const v = Math.hypot(a.vx, a.vz) || 1;
+        if (h.state === 'attack' && -(hs * a.vx + hc * a.vz) / v > 0.35) {        // cut down mid-swing
+          emit('arrow:deflect', { x: a.x, y: a.y, z: a.z });
+          L.splice(k, 1); continue;
+        }
+        if (h.hurt(A.dmg, a.x - a.vx * 0.2, a.z - a.vz * 0.2, false, 'arrow')) { emit('arrow:hit', { x: a.x, y: a.y, z: a.z }); L.splice(k, 1); continue; }
+      }
+      if (a.y <= 0.04) { a.y = 0.04; a.stuck = 1; a.t = 0; emit('arrow:ground', { x: a.x, z: a.z }); continue; }
+      if (a.t > a.life) L.splice(k, 1);
+    }
+  }
+
+  // ---- 騎兵: gallop passes through the hero, `past` m beyond him, then wheel round for the next
+  function rider(i, s, h, d, dx, dz) {
+    let ex = c.wx[i] - c.x[i], ez = c.wz[i] - c.z[i], e = Math.hypot(ex, ez);
+    if (s !== ST.ADVANCE || e < 3 || c.stT[i] > 420) {          // line up the next pass
+      const a = Math.atan2(dx, dz) + rng.range(-0.25, 0.25);
+      let tx = h.x + Math.sin(a) * CAV.past, tz = h.z + Math.cos(a) * CAV.past;
+      const r = Math.hypot(tx, tz), lim = CROWD.fieldR - 22;
+      if (r > lim) { tx *= lim / r; tz *= lim / r; }
+      c.wx[i] = tx; c.wz[i] = Math.min(tz, WALL_Z - 6);
+      setSt(i, ST.ADVANCE);
+      ex = c.wx[i] - c.x[i]; ez = c.wz[i] - c.z[i]; e = Math.hypot(ex, ez) || 1e-6;
+    }
+    const want = Math.atan2(ex, ez);
+    let da = want - c.yaw[i]; da = Math.atan2(Math.sin(da), Math.cos(da));
+    turn(i, want, CAV.turn);
+    const sp = CAV.speed * (1 - 0.5 * Math.min(1, Math.abs(da) / 1.6));   // rein in through the wheel
+    MV[0] = Math.sin(c.yaw[i]) * sp; MV[1] = Math.cos(c.yaw[i]) * sp;
+    // running him down: in reach, in front of the horse, on his feet
+    if (d < CAV.reach && c.cd[i] === 0 && h.y < 1 && (dx * Math.sin(c.yaw[i]) + dz * Math.cos(c.yaw[i])) / d > 0.3) {
+      c.cd[i] = CAV.cd; game.combat.trample(i);
+    }
+  }
+  function keepIn(i) {
+    const r = Math.hypot(c.x[i], c.z[i]), lim = CROWD.fieldR - 6;
+    if (r > lim) { c.x[i] *= lim / r; c.z[i] *= lim / r; }
+    if (c.z[i] > WALL_Z - 3) c.z[i] = WALL_Z - 3;
+    if (SOLIDS.length) { const o = pushOut(c.x[i], c.z[i], 1.0); if (o) { c.x[i] = o[0]; c.z[i] = o[1]; } }
+  }
+  /** Cavalry raids: a troop rides in from a camp gate near him, or out of the haze in front of the camera. */
+  function raids(h) {
+    if (!CAV.every || !c.wavesOn || game.frame < c.raidF || h.state === 'dead') return;
+    c.raidF = game.frame + Math.round(CAV.every * rng.range(0.8, 1.25));
+    if (game.boss?.alive()) return;
+    const a = game.cam.yaw + rng.range(-0.8, 0.8), d = rng.range(34, 42);
+    let sx = h.x + Math.sin(a) * d, sz = h.z + Math.cos(a) * d;
+    const gate = game.bases?.source(h);
+    if (gate) { sx = gate[0]; sz = gate[1]; }
+    const r = Math.hypot(sx, sz), lim = CROWD.fieldR - 20;
+    if (r > lim) { sx *= lim / r; sz *= lim / r; }
+    c.spawnRiders(rng.int(CAV.size[0], CAV.size[1]), sx, Math.min(sz, WALL_Z - 8), true);
+  }
 
   /** A strike starts: the guards nearest the striker raise their weapons and shout with him (DW9: 4-5 of ~30 raise
    *  together), and surge half a step in. The view reads raiseF for the war-cry pose. */
@@ -391,7 +580,7 @@ export function createCrowd(game, grunts = 300) {
     const k = rng.int(CROWD.rally[0], CROWD.rally[1]);
     let n = 0;
     for (let j = 0; j < N; j++) {
-      if (j === s || c.st[j] !== ST.GUARD || c.token[j] || c.form[j] || c.kind[j] === KIND.BEARER) continue;
+      if (j === s || c.st[j] !== ST.GUARD || c.token[j] || c.form[j] || offRing(c.kind[j])) continue;
       const d2 = (c.x[j] - c.x[s]) ** 2 + (c.z[j] - c.z[s]) ** 2;
       if (d2 > 30 || (n === k && d2 >= rallyD[n - 1])) continue;
       let m = n < k ? n++ : n - 1;                             // insertion into the k nearest
@@ -420,7 +609,7 @@ export function createCrowd(game, grunts = 300) {
       const s = c.st[i];
       if (s === ST.OFF || s === ST.DEAD) continue;
       if (c.form[i]) alive[c.squad[i]]++;
-      else if (s === ST.ADVANCE || s === ST.GUARD || s === ST.ATTACK) engaged++;
+      else if ((s === ST.ADVANCE || s === ST.GUARD || s === ST.ATTACK) && c.kind[i] !== KIND.ARCHER && c.kind[i] !== KIND.RIDER) engaged++;
     }
     for (let q = 0; q < S.n; q++) if (S.st[q] > SQ_HOLD) transit += alive[q];
     engaged += transit * 0.35;
@@ -439,7 +628,8 @@ export function createCrowd(game, grunts = 300) {
       else sp = CROWD.charge;
       if (Math.abs(da) > 0.9) sp *= 0.4;                                   // wheel first, then advance
       S.x[q] += Math.sin(S.face[q]) * sp * DT; S.z[q] += Math.cos(S.face[q]) * sp * DT;
-      if (S.st[q] === SQ_CHARGE && d < CROWD.fold) {                       // fold: members break into the ring
+      // fold: members break into the ring (a line of bows breaks ranks at bow range and spreads out to shoot)
+      if (S.mix[q] === MIX.ARCHER ? d < CROWD.archer.fold : S.st[q] === SQ_CHARGE && d < CROWD.fold) {
         S.st[q] = 0;
         for (let i = 0; i < N; i++) if (c.form[i] && c.squad[i] === q) { c.form[i] = 0; if (c.st[i] === ST.IDLE) setSt(i, ST.ADVANCE); }
       }
@@ -500,7 +690,7 @@ export function createCrowd(game, grunts = 300) {
         }
         let best = -1, bd = Infinity;
         for (let i = 0; i < N; i++) {
-          if (c.band[i] <= k || c.kind[i] === KIND.BEARER || !ok(i)) continue;
+          if (c.band[i] <= k || offRing(c.kind[i]) || !ok(i)) continue;
           const d2 = (c.x[i] - px) ** 2 + (c.z[i] - pz) ** 2;
           if (d2 < bd) { bd = d2; best = i; }
         }
@@ -534,7 +724,7 @@ export function createCrowd(game, grunts = 300) {
     for (let k = 0; k < N; k++) {
       const i = (start + k) % N;
       const s = c.st[i];
-      if ((s !== ST.GUARD && s !== ST.ADVANCE) || c.token[i] || c.cd[i] > 0 || c.form[i] || c.kind[i] === KIND.BEARER) continue;
+      if ((s !== ST.GUARD && s !== ST.ADVANCE) || c.token[i] || c.cd[i] > 0 || c.form[i] || offRing(c.kind[i])) continue;
       const dx = c.x[i] - h.x, dz = c.z[i] - h.z, d = Math.hypot(dx, dz);
       if (d > 4.5) continue;
       const vis = (dx * fx + dz * fz) / (d || 1);             // 1 = straight beyond the hero (hidden behind his body)
@@ -548,7 +738,7 @@ export function createCrowd(game, grunts = 300) {
     head.fill(-1);
     for (let i = 0; i < N; i++) {
       const s = c.st[i];
-      if (s === ST.OFF || s === ST.DEAD || s === ST.DOWN || c.y[i] > 0.6) continue;
+      if (s === ST.OFF || s === ST.DEAD || s === ST.DOWN || c.y[i] > 0.6 || c.kind[i] === KIND.RIDER) continue;   // riders gallop through the foot
       const gx = Math.floor((c.x[i] + HALF) / CELL), gz = Math.floor((c.z[i] + HALF) / CELL);
       if (gx < 0 || gz < 0 || gx >= GRID || gz >= GRID) continue;
       const cell = gx + gz * GRID;
@@ -558,7 +748,7 @@ export function createCrowd(game, grunts = 300) {
     for (let i = 0; i < N; i++) {
       px[i] = 0; pz[i] = 0;
       const s = c.st[i];
-      if (s === ST.OFF || s === ST.DEAD || s === ST.DOWN || c.y[i] > 0.6) continue;
+      if (s === ST.OFF || s === ST.DEAD || s === ST.DOWN || c.y[i] > 0.6 || c.kind[i] === KIND.RIDER) continue;
       const gx = Math.floor((c.x[i] + HALF) / CELL), gz = Math.floor((c.z[i] + HALF) / CELL);
       for (let oz = -1; oz <= 1; oz++) for (let ox = -1; ox <= 1; ox++) {
         const x = gx + ox, z = gz + oz;
@@ -609,7 +799,7 @@ export function createCrowd(game, grunts = 300) {
     const r = Math.hypot(sx, sz);
     if (r > CROWD.fieldR - 4) { sx *= (CROWD.fieldR - 4) / r; sz *= (CROWD.fieldR - 4) / r; }
     sz = Math.min(sz, WALL_Z - 4);
-    makeSquad(off.slice(0, n), sx, sz, Math.atan2(h.x - sx, h.z - sz), 3, SQ_CHARGE);   // a column that runs straight in
+    makeSquad(off.slice(0, n), sx, sz, Math.atan2(h.x - sx, h.z - sz), 3, SQ_CHARGE, pickMix());   // a column that runs straight in
     // KO'd officers come back with the waves (unless a stage script is bringing them on)
     if (!scripted()) for (const i of freeSlots(true)) { place(i, sx + rng.range(-2, 2), sz + rng.range(-2, 2), true); break; }
     emit('crowd:wave', { count: n, x: sx, z: sz });

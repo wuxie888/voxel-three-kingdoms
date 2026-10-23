@@ -31,6 +31,8 @@ import { createProps } from './stages/props.js';
 import { createStructures } from './stages/structures.js';
 import { createBases } from './stages/bases.js';
 import { createBasesView } from './stages/basesView.js';
+import { createHorses } from './horse/horses.js';
+import { createMount } from './hero/mount.js';
 import { createWeather } from './world/weather.js';
 import { createTouch } from './ui/touch.js';
 import { createArmory, itemCard } from './ui/armory.js';
@@ -67,6 +69,8 @@ const bossCfg = STAGE.boss && (STAGE.boss.id === HERO.id ? STAGE.boss.alt : STAG
 game.boss = bossCfg ? createBoss(game, HEROES.find((h) => h.id === bossCfg.id)) : null;
 game.campaign = createCampaign(game);   // the battle's goals (STAGE.script): officers, spots to take, the boss → 勝利
 game.bases = createBases(game);         // the camps of the field (STAGE.map.bases): garrisons, captains, reinforcements
+game.horses = createHorses(game);       // loose horses (a rider thrown from the saddle leaves his), his own when called
+game.mount = createMount(game);         // riding: mount / call / dismount, the horse under him, swings from the saddle
 const input = createInput();
 const touch = createTouch(input, game, { onPause: () => setPaused(true) });   // phones / tablets: stick + buttons
 game.supplies = createSupplies(game);         // jars / crates on the field, food, wine, 虎符, 玄甲 (supplies/supplies.js)
@@ -110,6 +114,7 @@ function step() {
   game.hero.step(inp);
   game.combat.step();
   game.crowd.step();
+  game.horses.step();
   game.supplies.step();
   if (game.boss) game.boss.step();
   game.campaign.step();
@@ -215,7 +220,7 @@ const result = (() => {
 /** His level and loadout (progress/profile.js) onto the sim hero: health, run speed; combat reads hero.gear. */
 function applyGear(keepHp = false) {
   const h = game.hero, G = gearOf(HERO.id), k = h.hpMax ? h.hp / h.hpMax : 1;
-  h.gear = G; h.hpMax = HP0 + G.hp; h.spdK = 1 + G.spd;
+  h.gear = G; h.hpMax = Math.round(HP0 + G.hp); h.spdK = 1 + G.spd;
   if (keepHp) h.hp = Math.min(h.hpMax, Math.round(h.hpMax * k));
 }
 function start() {
@@ -223,7 +228,7 @@ function start() {
   result.hide();
   applyGear();
   game.hero.reset();
-  game.crowd.reset(); game.combat.reset(); game.musou.reset(); game.cam.reset(game.hero.yaw);
+  game.crowd.reset(); game.combat.reset(); game.musou.reset(); game.cam.reset(game.hero.yaw); game.horses.reset();
   if (game.boss) game.boss.reset(), game.boss.st = 'off';
   game.campaign.reset();                         // before the army: with a script, the named officers wait for their goal
   game.bases.reset();                            // camps back to their holders; spawnArmy garrisons the enemy's

@@ -18,6 +18,8 @@ import { pushOut } from '../world/setpieces.js';
 import { emit } from '../core/events.js';
 import { HERO } from '../heroes/index.js';
 import { fanOverlay } from './anims/fan.js';
+import { gait, HORSE_DIM } from '../horse/model.js';
+import { MOUNT } from './mount.js';
 
 /** Clip registry sampled by the hero. Other parts (musou) register their clips here. */
 // a hero with his own moveset brings his own attack clips, authored on his own move table (heroes/*.moves.js)
@@ -40,6 +42,7 @@ export function createHero(game) {
     state: 'idle', stateT: 0, move: null, moveT: 0, moveSeq: 0,
     grounded: true, airAttack: false, iframes: 0, speed: 0, runT: 0, sprint: 0, sprintT: 0, runPhase: 0,
     combo: 0, comboT: 0, kos: 0, atk: 1, taken: 0, buffAtk: 0, buffDef: 0, hurtF: -99,   // buffs: frames left (supplies/supplies.js)
+    riding: false, steed: null, steedOwn: false, horsePh: 0,   // in the saddle (hero/mount.js): the horse's coat, his own?, its stride
     buf: null, bufT: 0, dodgeBuf: 0, jumpBuf: 0, musouBuf: 0, dodgeX: 0, dodgeZ: 1,
     musouClip: null, musouT: 0,
     airN: 0, moveAir: false,                                  // combo-system: air-string count, vault
@@ -55,7 +58,7 @@ export function createHero(game) {
     Object.assign(h, { x, y: 0, z, vx: 0, vy: 0, vz: 0, yaw, hp: h.hpMax, musou: 0, state: 'idle', stateT: 0, move: null,
       moveT: 0, moveSeq: 0, grounded: true, airAttack: false, iframes: 0, speed: 0, runT: 0, sprint: 0, sprintT: 0, runPhase: 0, combo: 0, comboT: 0,
       kos: 0, officerKOs: 0, atk: 1, taken: 0, buffAtk: 0, buffDef: 0, hurtF: -99, buf: null, bufT: 0, dodgeBuf: 0, jumpBuf: 0, musouBuf: 0, musouClip: null, musouT: 0,
-      airN: 0, moveAir: false, dodgeSeq: 0 });
+      airN: 0, moveAir: false, dodgeSeq: 0, riding: false, steed: null, steedOwn: false, horsePh: 0 });
     Object.assign(h.anim, { id: 'idle', t: 0, k: 0, seq: -1, pid: null, pt: 0, pk: 0, blendF: 1, blendN: 1, yaw, lean: 0, fx: x, fz: z, px: x, pz: z, mf: null, mt: 0, om: null, ot: 0 });
   };
 
@@ -63,8 +66,9 @@ export function createHero(game) {
   h.heal = (v) => { if (h.state !== 'dead') { h.hp = Math.min(h.hpMax, h.hp + v); emit('hero:heal', { v, hp: h.hp, x: h.x, z: h.z }); } };
 
   /** Called by combat when an enemy strike connects. Only moves with `armor` (charges, finishers, Lü Bu's string) keep
-   *  going through a blow; any other move is knocked out of his hands — the ring is a threat, not scenery. */
-  h.hurt = (dmg, fromX, fromZ, officer) => {
+   *  going through a blow; any other move is knocked out of his hands — the ring is a threat, not scenery. `kind`:
+   *  'arrow' stings without stopping him (crowd.js arrows); 'trample' (a rider running him down) throws him further. */
+  h.hurt = (dmg, fromX, fromZ, officer, kind) => {
     if (h.iframes > 0 || h.state === 'musou' || h.state === 'dodge') return false;
     if (h.state === 'dead') return false;
     // a blow taken through armour still buys 0.4 s: a multi-tick strike (the boss's sweep) lands once, not four times
@@ -76,16 +80,21 @@ export function createHero(game) {
     h.hp = Math.max(0, h.hp - dmg);
     h.musou = Math.min(h.musouMax, h.musou + dmg * 0.15);
     const armored = h.hp > 0 && !!h.move && !!MOVES[h.move].armor;
-    emit('hero:hurt', { dmg, hp: h.hp, x: h.x, y: h.y + 1.2, z: h.z, armored });
+    emit('hero:hurt', { dmg, hp: h.hp, x: h.x, y: h.y + 1.2, z: h.z, armored, kind });
     if (h.hp <= 0) {                                         // 戰死: falls, the sim keeps running, main.js shows the result
+      if (h.riding) game.mount.dismount(h, 'thrown');
       h.move = null; setState(h, 'dead'); h.vx = h.vz = 0; h.combo = 0;
       emit('hero:death', { x: h.x, z: h.z, kos: h.kos, frame: game.frame });
       return true;
     }
-    if (armored) return true;
-    const dx = h.x - fromX, dz = h.z - fromZ, l = Math.hypot(dx, dz) || 1;
+    if (armored || kind === 'arrow') return true;
+    if (h.riding) {                                          // in the saddle a grunt's blow only costs health; a heavy one throws him
+      if (!officer && kind !== 'trample') return true;
+      game.mount.dismount(h, 'thrown');
+    }
+    const dx = h.x - fromX, dz = h.z - fromZ, l = Math.hypot(dx, dz) || 1, push = kind === 'trample' ? 7 : 3.5;
     h.move = null; setState(h, 'hurt');
-    h.vx = dx / l * 3.5; h.vz = dz / l * 3.5;
+    h.vx = dx / l * push; h.vz = dz / l * push;
     h.iframes = 40;
     h.combo = 0; h.comboT = 0;
     return true;
@@ -102,9 +111,14 @@ export function createHero(game) {
     if (h.musouBuf > 0) h.musouBuf--;
     if (h.state === 'musou') game.musou.stepHero(inp);
     // musou part r3: one full gauge segment is enough (game.musou.ready; one Musou spends one of the 3 segments)
-    else if (h.musouBuf && game.musou.ready() && h.grounded && h.state !== 'hurt') { h.musouBuf = 0; game.musou.start(inp); }
+    else if (h.musouBuf && game.musou.ready() && h.grounded && h.state !== 'hurt' && h.state !== 'mount') {
+      if (h.riding) game.mount.dismount(h, 'musou');          // down from the saddle into it
+      h.musouBuf = 0; game.musou.start(inp);
+    }
+    else if (h.riding) game.mount.step(h, inp);              // hero/mount.js: the horse, swings from the saddle
+    else if (inp.pressed.horse && game.mount.horse()) {}     // a horse within reach, or his own called
     else if (!stepCombo(h, inp, game)) stepLocomotion(h, inp, game.cam.yaw);
-    if (h.state !== 'run' && h.state !== 'jump' && h.state !== 'land') h.sprint = h.sprintT = 0;   // a swing, a blow, a roll end the 疾走
+    if (!h.riding && h.state !== 'run' && h.state !== 'jump' && h.state !== 'land') h.sprint = h.sprintT = 0;   // a swing, a blow, a roll end the 疾走
     if (stepPhysics(h) && h.state === 'jump') setState(h, 'land');
     // arena bounds (castle wall in +Z)
     const r = Math.hypot(h.x, h.z);
@@ -123,6 +137,7 @@ function animDesc(h) {
     case 'attack': { const c = moveClip(MOVES[h.move], h.moveT); return [c[0], c[1], 0, h.moveSeq * 16 + c[2]]; }
     case 'musou': return [h.musouClip, h.musouT, 0, -2];
     case 'run': return ['run', h.runPhase, Math.min(1.6, h.speed / LOCO.runSpeed), -1];   // > 1: sprint / 疾風 gear (no skating)
+    case 'ride': case 'mount': return ['run', h.horsePh, 0.3, -4];                        // the upper body of a run, legs in the stirrups (view)
     case 'dodge': return ['dodge', h.stateT / LOCO.dodgeFrames, 0, -100 - h.dodgeSeq];   // new seq per dodge → re-blend on a double dodge
     // locomotion-dodge r2: after an air string (airN > 0) the fall uses the DW8 spread-arm descent
     case 'jump': return [h.airN ? 'airFall' : 'air', Math.min(1, Math.max(0, 0.5 - h.vy / (2 * LOCO.jumpV))), 0, -1];
@@ -191,7 +206,21 @@ export function createHeroView(scene, hero) {
   // trails do not depend on the roll.
   const lead = HERO.style?.edgeLead, grip = HERO.style?.grip;
   const tipP = new THREE.Vector3(), tipN = new THREE.Vector3(), vel = new THREE.Vector3(), wq = new THREE.Quaternion();
-  let roll = 0, hasTip = false;
+  let roll = 0, hasTip = false, side = 0;
+  // in the saddle (hero/mount.js): pelvis on the saddle, feet in the stirrups, knees forward; the upper body keeps its
+  // clip (a swing from the saddle is his standing swing). Swinging up ('mount') eases in from beside the horse.
+  const GA = {}, SEAT = HORSE_DIM.bodyY + 0.44 - 0.9 * HERO_SCALE;
+  function ride(p) {
+    gait(hero.horsePh, hero.speed, GA);
+    const u = hero.state === 'mount' ? Math.min(1, hero.stateT / MOUNT.mountF) : 1, e = u * u * (3 - 2 * u);
+    const mix = (i, v) => { p[i] += (v - p[i]) * e; };
+    mix(CH.hips, 0); mix(CH.hips + 1, 0.9); mix(CH.hips + 2, 0);
+    mix(CH.hipsR, 0.08 + 0.15 * Math.min(1, hero.speed / 10));             // lean into the gallop
+    [[CH.footL, 0.27], [CH.footR, -0.27]].forEach(([f, x]) => { mix(f, x); mix(f + 1, 0.3); mix(f + 2, 0.04); mix(f + 3, 0.2); mix(f + 4, x > 0 ? 0.25 : -0.25); });
+    p[CH.plant] = 0;
+    side = 0.65 * (1 - e);                                    // he comes up from the horse's left
+    return (SEAT + GA.bob) * (hero.state === 'mount' ? Math.sin(Math.min(1, u * 1.15) * Math.PI / 2) : 1);
+  }
   function edgeLead(dt) {
     const w = rig.joints.weapon;
     w.rotation.z += roll; w.updateMatrixWorld(true);
@@ -216,8 +245,9 @@ export function createHeroView(scene, hero) {
     update(dt) {
       heroPose(hero, pose);
       if (grip) pose[CH_GRIPL] = Math.max(pose[CH_GRIPL], grip);   // heavy blades: hands wide apart on the shaft
+      const lift = hero.riding ? ride(pose) : 0;
       rig.root.scale.set(1, 1, 1);               // locomotion-dodge r3: applyRoll's squash & stretch is per frame; IK needs scale 1
-      rig.apply(pose, pos.set(hero.x, hero.y, hero.z), hero.yaw);
+      rig.apply(pose, pos.set(hero.x + side * Math.cos(hero.yaw), hero.y + lift, hero.z - side * Math.sin(hero.yaw)), hero.yaw);
       rig.root.scale.setScalar(HERO_SCALE); rig.root.updateMatrixWorld(true);   // after IK: grow the posed body about the ground point
       applyRoll(rig, hero.anim);                 // dive roll: whole-body pitch about the tucked ball (locomotion-dodge)
       if (hero.state === 'dead') {               // topple backwards over ≈ 0.6 s
