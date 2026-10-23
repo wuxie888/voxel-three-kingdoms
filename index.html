@@ -361,7 +361,61 @@
   }
   /* start + armory buttons; officer level on the hero cards */
   #menu .gobar { display: flex; gap: 1.2rem; align-items: flex-end; }
-  #menu .gobar #arm { background: rgba(0,0,0,.5); color: #f4ead8; box-shadow: 0 0 0 .15rem rgba(242,193,78,.6); padding: 1.2rem 2.6rem; }
+  #menu .gobar #arm, #menu .gobar #storyBtn { background: rgba(0,0,0,.5); color: #f4ead8; box-shadow: 0 0 0 .15rem rgba(242,193,78,.6); padding: 1.2rem 2.6rem; }
+  #menu .gobar #storyBtn { background: linear-gradient(rgba(179,38,30,.85), rgba(110,20,14,.85)); }
+  /* story mode (ui/story.js): chapter list */
+  #story { position: fixed; inset: 0; z-index: 8; display: flex; align-items: center; justify-content: center; background: rgba(8,5,3,.75);
+    font-family: "Kaiti SC", "STKaiti", "KaiTi", "HudBrush", serif; color: #f4ead8; user-select: none; }
+  #story[hidden] { display: none; }
+  #story .st-box { width: min(150vh, 96vw); padding: 2.6vh 3vh; box-sizing: border-box; background: linear-gradient(#2a1c14, #140c08); border-radius: .8vh;
+    box-shadow: 0 0 0 .2vh rgba(242,193,78,.55), 0 2vh 6vh rgba(0,0,0,.6); }
+  #story .st-head { display: flex; align-items: baseline; gap: 2vh; margin-bottom: 2vh; }
+  #story .st-head b { font: 700 5vh/1 "Xingkai SC", "STXingkai", "HudBrush", serif; letter-spacing: .6vh; }
+  #story .st-head small { flex: 1; font: 600 1.6vh/1 "Avenir Next", sans-serif; letter-spacing: .3em; opacity: .7; }
+  #story .st-x { border: 0; background: none; color: #f4ead8; font-size: 3.4vh; cursor: pointer; }
+  #story .st-list { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1.4vh; }
+  #story .chap { position: relative; text-align: left; cursor: pointer; padding: 1.8vh 1.6vh; border: 0; border-radius: .6vh; color: #f4ead8;
+    background: linear-gradient(160deg, rgba(110,20,14,.55), rgba(20,12,8,.9) 60%); box-shadow: inset 0 0 0 .2vh rgba(242,193,78,.45); font-family: inherit; }
+  #story .chap:hover { box-shadow: inset 0 0 0 .3vh #f2c14e; }
+  #story .chap > small { display: block; font: 600 1.35vh/1.3 "Avenir Next", "Kaiti SC", sans-serif; letter-spacing: .1em; color: #f2c14e; }
+  #story .chap > b { display: block; margin-top: 1vh; font: 700 3.4vh/1.1 "Xingkai SC", "STXingkai", "HudBrush", serif; letter-spacing: .3vh; }
+  #story .chap > span { display: block; margin-top: .5vh; font: 600 1.2vh/1.2 "Avenir Next", sans-serif; letter-spacing: .15em; opacity: .7; }
+  #story .chap .who { display: flex; align-items: center; gap: 1vh; margin-top: 1.6vh; }
+  #story .chap canvas { width: 6vh; height: 6vh; image-rendering: pixelated; border-radius: 50%; background: #2a1c14; box-shadow: 0 0 0 .25vh rgba(214,184,130,.6); }
+  #story .chap em { font-style: normal; font-size: 1.7vh; line-height: 1.4; }
+  #story .chap p { margin: 1.4vh 0 0; font-size: 1.6vh; line-height: 1.5; opacity: .85; min-height: 4.8vh; }
+  #story .chap .rk { position: absolute; right: 1.2vh; top: 1vh; font: 800 3vh/1 "Avenir Next", sans-serif; font-style: italic; color: #f4ead8; }
+  #story .chap .rk[data-r="S"] { color: #ffd658; } #story .chap .rk[data-r="A"] { color: #ff7a52; } #story .chap .rk[data-r="B"] { color: #8fc4ff; }
+  #story .chap.locked { cursor: default; filter: grayscale(.9) brightness(.55); }
+  #story .chap .lock { position: absolute; right: 1.2vh; top: 1.2vh; font: 700 1.8vh/1 "Kaiti SC", serif; font-style: normal; padding: .4vh .6vh; background: #5a4a3a; border-radius: .3vh; }
+  /* story cutscene: title card, narration, speaker lines */
+  #cine { position: fixed; inset: 0; z-index: 7; cursor: pointer; user-select: none; color: #f4ead8;
+    background: linear-gradient(rgba(6,4,3,.55), rgba(6,4,3,0) 30%, rgba(6,4,3,0) 55%, rgba(6,4,3,.85)); }
+  #cine[hidden], #cine [hidden] { display: none !important; }
+  #cine .ci-title { position: absolute; left: 6vw; top: 7vh; animation: ciIn 1.2s ease-out both; }
+  #cine .ci-title small { display: block; font: 600 2vh/1 "Avenir Next", "Kaiti SC", sans-serif; letter-spacing: .3em; color: #f2c14e; }
+  #cine .ci-title b { display: block; margin-top: 1.2vh; font: 700 9vh/1 "Xingkai SC", "STXingkai", "HudBrush", serif; letter-spacing: 1.2vh; text-shadow: .5vh .7vh 0 rgba(0,0,0,.55); }
+  #cine .ci-title span { display: block; margin-top: 1vh; font: 600 1.8vh/1 "Avenir Next", sans-serif; letter-spacing: .5em; opacity: .8; }
+  #cine .ci-title.post { opacity: .55; }
+  @keyframes ciIn { from { opacity: 0; transform: translateX(-3vw); } to { opacity: 1; transform: none; } }
+  #cine .ci-narr { position: absolute; left: 12vw; right: 12vw; bottom: 14vh; text-align: center; }
+  #cine .ci-narr p { margin: 0; font: 600 3.2vh/1.7 "Kaiti SC", "STKaiti", "KaiTi", "HudBrush", serif; letter-spacing: .3vh; text-shadow: 0 .3vh .6vh #000; }
+  #cine .ci-narr small { display: block; margin-top: 1.4vh; font: 500 1.8vh/1.5 "Avenir Next", sans-serif; opacity: .75; }
+  #cine .ci-line { position: absolute; left: 8vw; right: 8vw; bottom: 9vh; display: flex; gap: 2.4vh; align-items: flex-start; padding: 2vh 2.4vh;
+    background: linear-gradient(90deg, rgba(10,6,4,.85), rgba(10,6,4,.6)); border-left: .4vh solid #f2c14e; }
+  #cine .ci-line canvas { width: 11vh; height: 11vh; flex: none; image-rendering: pixelated; border-radius: .6vh; background: #2a1c14; box-shadow: 0 0 0 .3vh rgba(214,184,130,.6); }
+  #cine .ci-line .seal { display: none; width: 11vh; height: 11vh; flex: none; align-items: center; justify-content: center; font: 700 6vh/1 "Xingkai SC", "STXingkai", "HudBrush", serif;
+    font-style: normal; color: #f8e6d2; background: #8a2018; border-radius: .6vh; box-shadow: inset 0 0 0 .4vh rgba(248,230,210,.6); }
+  #cine .ci-line.noface canvas { display: none; } #cine .ci-line.noface .seal { display: flex; }
+  #cine .ci-line b { display: block; font: 700 3vh/1 "Xingkai SC", "STXingkai", "HudBrush", serif; color: #ffe7a3; }
+  #cine .ci-line b span { font: 600 1.3vh/1 "Avenir Next", sans-serif; letter-spacing: .3em; opacity: .7; margin-left: .8vh; }
+  #cine .ci-line p { margin: 1.2vh 0 .8vh; font: 600 3vh/1.5 "Kaiti SC", "STKaiti", "KaiTi", "HudBrush", serif; }
+  #cine .ci-line small { font: 500 1.7vh/1.4 "Avenir Next", sans-serif; opacity: .75; }
+  #cine .ci-skip { position: absolute; right: 3vw; top: 4vh; border: 0; border-radius: .5vh; padding: 1vh 1.8vh; cursor: pointer;
+    font: 700 1.6vh/1 "Avenir Next", sans-serif; letter-spacing: .15em; color: #f4ead8; background: rgba(0,0,0,.5); box-shadow: 0 0 0 .15vh rgba(239,227,207,.4); }
+  #cine .ci-next { position: absolute; right: 9vw; bottom: 4.5vh; font-size: 2.4vh; color: #f2c14e; opacity: 0; }
+  #cine.typed .ci-next { opacity: 1; animation: ciNext 1s ease-in-out infinite; }
+  @keyframes ciNext { 50% { transform: translateY(.8vh); } }
   #menu .heroes button { position: relative; }
   #menu .heroes .lvb { position: absolute; right: .5rem; top: -.8rem; font: 800 1.2rem/1 "Avenir Next", "Helvetica Neue", sans-serif; font-style: normal;
     padding: .2rem .5rem; border-radius: .3rem; background: #1a120d; color: #ffe7a3; box-shadow: 0 0 0 .1rem rgba(242,193,78,.6); }
@@ -438,6 +492,7 @@
     color: #1a120d; background: linear-gradient(#ffe7a3, #f2c14e 55%, #c98a22); box-shadow: 0 0 0 .2vh #5a3a10, 0 .6vh 1.8vh rgba(0,0,0,.5); }
   #result button[data-a="menu"], #result button[data-a="go"] { background: rgba(0,0,0,.5); color: #f4ead8; box-shadow: 0 0 0 .15vh rgba(239,227,207,.4); }
   #result button[hidden] { display: none; }
+  #result button[data-a="next"] { background: linear-gradient(#ffe7a3, #f2c14e 55%, #c98a22); color: #1a120d; }
   #result button small { display: block; margin-top: .8vh; font: 600 1.3vh/1 "Avenir Next", sans-serif; letter-spacing: .25em; }
   @keyframes resIn { from { opacity: 0; } to { opacity: 1; } }
 </style>
@@ -469,7 +524,7 @@
     <div><span>視角<small>CAMERA</small></span><span><kbd>Q</kbd><kbd>E</kbd> / drag</span></div>
   </div>
   <div class="tguide"><b>左半屏</b> 移動 · <b>攻</b> 攻擊 · <b>蓄</b> 蓄力 · <b>跳</b> 跳躍 · <b>閃</b> 閃避 · <b>無雙</b> 槽滿時發動 · <b>右半屏滑動</b> 視角</div>
-  <div class="gobar"><button id="go">出陣<small>START</small></button><button id="arm">武庫<small>ARMORY</small></button></div>
+  <div class="gobar"><button id="go">出陣<small>START</small></button><button id="storyBtn">劇情<small>STORY</small></button><button id="arm">武庫<small>ARMORY</small></button></div>
   <div class="hint">← → 選將 hero · ↑ ↓ 選戰場 battle · Enter to start · Esc to pause · gamepad supported · best with keyboard, mouse and sound on</div>
 </div>
 <script type="module" src="./src/main.js"></script>

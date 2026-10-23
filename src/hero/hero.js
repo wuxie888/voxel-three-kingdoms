@@ -13,6 +13,7 @@ import { MOVES, moveClip } from './moves.js';
 import { bufferInput, stepCombo } from './combo.js';
 import { stepLocomotion, stepPhysics, setState, LOCO } from './locomotion.js';
 import { ARENA_RADIUS, WALL_Z } from '../world/world.js';
+import { pushOut } from '../world/setpieces.js';
 import { emit } from '../core/events.js';
 import { HERO } from '../heroes/index.js';
 import { fanOverlay } from './anims/fan.js';
@@ -107,6 +108,7 @@ export function createHero(game) {
     const r = Math.hypot(h.x, h.z);
     if (r > ARENA_RADIUS) { h.x *= ARENA_RADIUS / r; h.z *= ARENA_RADIUS / r; }
     if (h.z > WALL_Z - 3) h.z = WALL_Z - 3;
+    if (!h.y || h.y < 2.5) { const o = pushOut(h.x, h.z, 0.45); if (o) { h.x = o[0]; h.z = o[1]; } }   // altars, dams, the well
     updateAnim(h);
   };
   return h;

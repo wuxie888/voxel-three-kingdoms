@@ -102,8 +102,10 @@ export function createCombat(game) {
       if (applyHit(i, hit, ox, oz, yaw, moveId)) kos++;
       victims[count++] = i; sx += c.x[i]; sy += c.y[i]; sz += c.z[i];
     }
-    // jars and supply crates on the field break under any hero blow (supplies/supplies.js)
+    // jars and supply crates on the field break under any hero blow (supplies/supplies.js); a destroy goal's structures
+    // take its damage (stages/campaign.js)
     if (game.supplies) game.supplies.strike((x, z) => pointIn(x, 0.4, z, 0.4, hit, ox, oz, yaw));
+    if (game.campaign && (MOVES[moveId] || moveId === 'musou')) game.campaign.hitTargets((x, z, r) => pointIn(x, 1.0, z, r, hit, ox, oz, yaw), hit.dmg * atkK(game.hero), key, rehit);
     // the boss (boss.js) is struck by the same windows; he counts toward the hit total but takes no crowd reaction
     const B = game.boss;
     if (B && B.alive() && (rehit || B.lastHit !== key) && pointIn(B.x, B.y, B.z, 1.0, hit, ox, oz, yaw)) {   // he stands 1.2× tall

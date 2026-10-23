@@ -113,6 +113,80 @@ export const STAGES = [
       zhangfei: ['燒得好！燕人張飛來也！', 'What a blaze! Here comes Zhang Fei of Yan!'],
     },
   },
+  {
+    id: 'huangjin', zh: '黃巾之亂', en: 'YELLOW TURBANS', seal: '黃巾', time: '清晨', look: 'dusk', set: 'altars',
+    intro: ['<em>黃巾之亂</em>', 'The Yellow Turban Rebellion — the sorcerer Zhang Jiao rises at Guangzong'],
+    enemy: { ch: '黃', army: '黃巾軍', en: 'Yellow Turban', band: 0xe0b020, cloth: 0x7a6430,
+      officers: [['程遠志', 'CHENG YUANZHI'], ['鄧茂', 'DENG MAO'], ['張寶', 'ZHANG BAO'], ['張梁', 'ZHANG LIANG']] },
+    ally: { ch: '漢', label: '漢' },
+    // the three altars of the Way of Great Peace: break them and the sorcery breaks with them
+    props: [{ kind: 'altars', at: [[-22, 18], [24, 12], [2, 34]] }],
+    script: [
+      { kind: 'officer', slots: [0, 1], goal: ['擊破 程遠志・鄧茂', 'Defeat Cheng Yuanzhi and Deng Mao'],
+        lines: { start: [['off:0', '蒼天已死，黃天當立！誰敢擋我黃巾大軍！', 'The blue sky is dead, the yellow sky shall rise! Who dares stand before us?'],
+          ['hero', { guanyu: ['初陣在此，正好拿你祭刀！', 'My first battle — your head will christen my blade!'], zhangfei: ['好！俺老張正手癢！', 'Ha! My spear has been itching for this!'],
+            '*': ['黃巾賊寇，速速受死！', 'Yellow Turban bandits — your end is here!'] }]] } },
+      { kind: 'destroy', points: [[-22, 18], [24, 12], [2, 34]], hp: 900, r: 2.3, label: '祭壇', goal: ['破壞 黃巾祭壇', 'Destroy the Yellow Turban altars'],
+        lines: { start: [['off:2', '天公將軍法力無邊，祭壇在此，汝等休想近前！', 'The General of Heaven\'s sorcery knows no bounds — none shall reach the altars!']],
+          done: [['hero', ['妖壇已破，妖術不攻自破！', 'The altars are broken — and their sorcery with them!']]] } },
+      { kind: 'officer', slots: [2, 3], goal: ['擊破 張寶・張梁', 'Defeat Zhang Bao and Zhang Liang'],
+        lines: { start: [['off:3', '大哥的大業，豈容爾等破壞！', 'You will not ruin our brother\'s great cause!']] } },
+      { kind: 'officer', slots: [0], names: [['張角', 'ZHANG JIAO']], hp: 2.4, commander: true, goal: ['擊破 張角', 'Defeat Zhang Jiao'],
+        lines: { start: [['off:0', '吾乃天公將軍張角！黃天之下，眾生皆吾信徒！', 'I am Zhang Jiao, General of Heaven! Under the yellow sky all are my faithful!']] } },
+    ],
+    clear: ['黃巾之亂 平定', 'The Yellow Turban rebellion is crushed'],
+    par: { time: 230, kos: 550 },
+    sky: {
+      sunElev: 0.32, sunAz: -0.7, haze: 0xc2ad80, hazeWarm: 0xe6c690, glow: 0xfff0c8, skyMid: 0xd4bd88, skyTop: 0x88a0bc,
+      hznSun: 0xffdc98, hznAway: 0xcdb486, cloudRose: 0xf0deb4, cloudShade: 0xa89670, cloudLit: 0xfff4d8,
+      dustLit: 0xe2c88e, dustShade: 0x9a8a66, apCool: 0xa8a07e, sunCore: [3.0, 2.8, 2.2], dust: 0.2,
+    },
+    light: { hemi: [0xe8dcc0, 0x8a7a5a, 2.2], sun: [0xfff0d0, 3.3], rim: [0xffe0a0, 0.7], fire: 0.8 },
+    post: { exposure: 1.1, sat: 1.1 },
+    lines: {
+      guanyu: ['桃園結義，誓同生死——今日便是初陣！', 'Sworn brothers in the peach garden — today is our first battle!'],
+      zhangfei: ['大哥二哥，看俺張飛殺他個痛快！', 'Brothers, watch Zhang Fei cut them down!'],
+      zhaoyun: ['亂世之中，當以長槍護佑蒼生！', 'In a world in chaos, my spear shall guard the people!'],
+      zhugeliang: ['黃巾雖眾，不過烏合之眾耳。', 'The Yellow Turbans are many — but a rabble all the same.'],
+      lubu: ['區區黃巾，也配與我呂布交手？', 'Yellow Turban rabble — fit to cross blades with Lü Bu?'],
+    },
+  },
+  {
+    id: 'fancheng', zh: '樊城', en: 'FANCHENG', seal: '樊城', time: '秋雨', look: 'storm', set: 'flood', weather: 'rain',
+    intro: ['<em>樊城</em>之戰', 'Battle of Fancheng — the autumn rains swell the Han river'],
+    enemy: { ch: '魏', army: '魏軍', en: 'Wei', band: 0x3a5ad0, cloth: 0x2a3050,
+      officers: [['董衡', 'DONG HENG'], ['董超', 'DONG CHAO'], ['于禁', 'YU JIN'], ['龐德', 'PANG DE']] },
+    ally: { ch: '蜀', label: '蜀' },
+    // 水淹七軍: the levee dams along the swollen Han; breach them and the river takes Yu Jin's seven armies
+    props: [{ kind: 'dams', at: [[-24, 40], [0, 43], [24, 40]] }],
+    script: [
+      { kind: 'officer', slots: [0, 1], goal: ['擊破 董衡・董超', 'Defeat Dong Heng and Dong Chao'],
+        lines: { start: [['off:0', '七軍在此，關羽安敢來犯！', 'The seven armies stand here — how dare Guan Yu attack!']] } },
+      { kind: 'destroy', points: [[-24, 40], [0, 43], [24, 40]], hp: 1000, r: 2.8, label: '堤壩', flood: true, goal: ['掘開 漢水堤壩', 'Breach the Han river dams'],
+        lines: { start: [['hero', { guanyu: ['秋雨連綿，漢水暴漲——掘開堤壩，水淹七軍！', 'The rains have swollen the Han — breach the dams and drown the seven armies!'],
+            '*': ['漢水暴漲，掘開堤壩，以水代兵！', 'The Han is in flood — breach the dams and let the river fight for us!'] }]],
+          done: [['hero', ['大水來了！', 'Here comes the water!']]] } },
+      { kind: 'officer', slots: [2], goal: ['擊破 于禁', 'Defeat Yu Jin'],
+        lines: { start: [['off:2', '大水……七軍盡沒……吾當如何是好！', 'The water... the seven armies are lost... what am I to do!']] } },
+      { kind: 'officer', slots: [3], hp: 2.6, commander: true, goal: ['擊破 龐德', 'Defeat Pang De'],
+        lines: { start: [['off:3', '吾寧為國家鬼，不為賊將也！', 'I would rather die a ghost of my state than live as a rebel\'s general!']] } },
+    ],
+    clear: ['威震華夏', 'His might shakes the whole realm'],
+    par: { time: 240, kos: 650 },
+    sky: {
+      sunElev: 0.3, sunAz: 0.2, haze: 0x6e7884, hazeWarm: 0x848c96, glow: 0xb8c2cc, skyMid: 0x5e6874, skyTop: 0x343c48,
+      hznSun: 0x8e98a2, hznAway: 0x646e78, cloudRose: 0x6e747c, cloudShade: 0x30363e, cloudLit: 0xa2aab2,
+      dustLit: 0x80888e, dustShade: 0x444c56, apCool: 0x627288, sunCore: [1.4, 1.5, 1.6], dust: 0.1,
+    },
+    light: { hemi: [0x9aa8bc, 0x4a4a48, 2.1], sun: [0xc8d4e0, 2.3], rim: [0x9ab0c8, 0.6], fire: 0.35 },
+    lines: {
+      guanyu: ['關某在此，曹賊七軍，今日皆休！', 'Guan Yu is here — today Cao Cao\'s seven armies end!'],
+      zhangfei: ['二哥用水，俺用矛！', 'Second brother brings the river — I bring my spear!'],
+    },
+  },
 ];
+// in the order of the history on the title screen; a first visit opens on 長坂坡
+const ORDER = ['huangjin', 'hulao', 'changban', 'chibi', 'fancheng'];
+STAGES.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
 const pick = new URLSearchParams(location.search).get('stage');
-export const STAGE = STAGES.find((s) => s.id === pick) || STAGES[0];
+export const STAGE = STAGES.find((s) => s.id === pick) || STAGES.find((s) => s.id === 'changban');

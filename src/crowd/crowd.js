@@ -20,9 +20,14 @@
 import { rng } from '../core/rng.js';
 import { emit } from '../core/events.js';
 import { WALL_Z as WALL } from '../world/world.js';
-import { SET, RIVER } from '../world/setpieces.js';
+import { SET, RIVER, LEVEE, SOLIDS, pushOut } from '../world/setpieces.js';
+import { STAGE } from '../stages/index.js';
+import { HERO } from '../heroes/index.js';
+// officer slot k's name [zh, en]: the stage's four by default (the hero never fights himself: enemy.swap), a stage
+// script may give a slot a new man when it brings him on (spawnOfficer name)
+const NAMES = () => STAGE.enemy.officers.map((o, i) => (i === 3 && STAGE.enemy.swap?.[HERO.id]) || o);
 // far limit of the field: the castle wall, or the near bank where a river crosses the field (赤壁)
-const WALL_Z = SET === 'river' ? RIVER.z0 + 2 : WALL;
+const WALL_Z = SET === 'river' ? RIVER.z0 + 2 : SET === 'flood' ? LEVEE.z0 + 0.5 : WALL;
 
 export const ST = { OFF: 0, IDLE: 1, ADVANCE: 2, GUARD: 3, ATTACK: 4, HURT: 5, KNOCK: 6, AIR: 7, DOWN: 8, GETUP: 9, DEAD: 10 };
 export const isReacting = (s) => s >= ST.HURT && s <= ST.GETUP;
@@ -66,6 +71,7 @@ export function createCrowd(game, grunts = 300) {
     armorF: I(),                                                // officers: armoured (no stagger) until this frame (combat breakout)
     frozen: I(),                                                // frames left frozen solid (冰 weapons, combat.js): no AI, no reaction
     waveT: 0, tokensUsed: 0, strikeF: 0, gap: 0, graceF: 0, heroHp: 0, wavesOn: false, engaged: 0,
+    names: NAMES(),
   };
   const head = new Int32Array(GRID * GRID), next = new Int32Array(N);
   const scripted = () => !!game.campaign?.active;
@@ -94,6 +100,7 @@ export function createCrowd(game, grunts = 300) {
   const gruntKind = () => { const r = rng.next(); return r < 0.05 ? KIND.CAPTAIN : r < 0.42 ? KIND.SWORD : KIND.SPEAR; };
 
   c.reset = () => {
+    c.names = NAMES();
     c.st.fill(ST.OFF); c.token.fill(0); c.tokensUsed = 0; c.strikeF = 0; c.gap = 0; c.graceF = 0; c.heroHp = game.hero.hp; c.waveT = 0; c.sq.n = 0; c.wavesOn = false;
   };
 
@@ -155,10 +162,11 @@ export function createCrowd(game, grunts = 300) {
     }
   };
 
-  /** Named officer k (STAGE.enemy.officers[k]) joins the fight at (x, z) and makes for the hero, hp × hpK; up to
-   *  `escort` free soldiers run in behind him as a column (stage scripts, stages/campaign.js). */
-  c.spawnOfficer = (k, x, z, { hpK = 1, escort = 0 } = {}) => {
+  /** Named officer k (c.names[k]; `name` [zh, en] puts a new man in the slot) joins the fight at (x, z) and makes for
+   *  the hero, hp × hpK; up to `escort` free soldiers run in behind him as a column (stage scripts, stages/campaign.js). */
+  c.spawnOfficer = (k, x, z, { hpK = 1, escort = 0, name = null } = {}) => {
     const i = grunts + k;
+    if (name) c.names[k] = name;
     z = Math.min(z, WALL_Z - 4);
     place(i, x, z, true);
     c.hpMax[i] = c.hp[i] = c.hpMax[i] * hpK;
@@ -556,6 +564,11 @@ export function createCrowd(game, grunts = 300) {
       const r = Math.hypot(c.x[i], c.z[i]);
       if (r > lim) { c.x[i] *= lim / r; c.z[i] *= lim / r; }
       if (c.z[i] > WALL_Z - 2) c.z[i] = WALL_Z - 2;
+    }
+    if (SOLIDS.length) for (let i = 0; i < N; i++) {             // nobody stands inside an altar or a dam
+      if (c.st[i] === ST.OFF || c.y[i] > 2) continue;
+      const o = pushOut(c.x[i], c.z[i], CROWD.radius);
+      if (o) { c.x[i] = o[0]; c.z[i] = o[1]; }
     }
   }
 

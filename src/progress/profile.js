@@ -68,6 +68,15 @@ export function addXP(hid, xp) {
 
 export const itemOf = (id) => (id != null ? P.items[id] || null : null);
 
+// story mode (stages/story.js): the best rank per chapter won
+const RANKS = ['C', 'B', 'A', 'S'];
+export const storyRank = (id) => P.story?.[id] || null;
+export function storyWon(id, rank) {
+  P.story = P.story || {};
+  if (!P.story[id] || RANKS.indexOf(rank) > RANKS.indexOf(P.story[id])) P.story[id] = rank;
+  save();
+}
+
 /** Everything his level and loadout add up to (hero.js / combat.js / supplies.js read it at the start of a battle). */
 export function gearOf(hid) {
   const h = heroP(hid), L = lvStats(h.lv);

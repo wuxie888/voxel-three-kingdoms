@@ -28,12 +28,17 @@ import { createSuppliesView } from './supplies/view.js';
 import { on } from './core/events.js';
 import { createCampaign } from './stages/campaign.js';
 import { createProps } from './stages/props.js';
+import { createStructures } from './stages/structures.js';
+import { createWeather } from './world/weather.js';
 import { createTouch } from './ui/touch.js';
 import { createArmory, itemCard } from './ui/armory.js';
-import { gearOf, addXP, heroP } from './progress/profile.js';
+import { gearOf, addXP, heroP, storyWon } from './progress/profile.js';
+import { createStoryMenu, createCutscene } from './ui/story.js';
+import { chapterById, nextChapter } from './stages/story.js';
 import { DIFFS, QUALITY, settings, saveSettings, bestOf, keepBest, rankOf } from './core/settings.js';
 
 const params = new URLSearchParams(location.search);
+const CH = chapterById(params.get('story'));                      // story mode: this chapter (stages/story.js)
 // graphics quality: chosen in the menu, or auto (last level the governor settled on; phones start at medium)
 const autoStart = () => settings.autoQ || (matchMedia('(pointer: coarse)').matches ? 'medium' : 'high');
 let qLevel = QUALITY[params.get('q')] ? params.get('q') : settings.quality === 'auto' ? autoStart() : settings.quality;
@@ -75,6 +80,8 @@ const bossView = game.boss ? createBossView(scene, game, vfx, { bossIntro: bossC
 const musouView = createMusouView(scene, game, camRig.camera);   // musou part: grade, dragon, cut-in (render-only)
 const props = createProps(scene, game, vfx, camRig.camera);                      // goal beacons, the bundle by the well, fire ships, the ally
 const suppliesView = createSuppliesView(scene, game, vfx);
+const structures = createStructures(scene, game, vfx);            // altars / dams to break, the flood
+const weather = createWeather(scene, camRig.camera);              // rain (STAGE.weather)
 // hud part: camera passed so officer name/HP tags can be projected over their heads (read-only)
 const hud = createHud(document.getElementById('hud'), game, { camera: camRig.camera });
 createAudio(game);
@@ -116,13 +123,15 @@ function render() {
   vfx.update(dt);
   sigFx.update(dt);
   suppliesView.update();
+  structures.update(dt);
+  weather.update(dt);
   if (chargeFx) chargeFx.update(dt);
   if (bossView) bossView.update(dt);
   props.update(dt);
   camRig.update(dt);
   world.update(dt, camRig.focus);
   musouView.update(dt);
-  post.flash(vfx.flash);
+  post.flash(Math.max(vfx.flash, weather.flash));
   post.render(scene, camRig.camera, game.frame / 60, camRig.focus, world.sunDir);   // post-fx: DoF focus + haze sun
   hud.update();
   touch.update();
@@ -134,11 +143,11 @@ const clock = (sec) => { const s = Math.round(sec); return `${Math.floor(s / 60)
 const result = (() => {
   const el = document.createElement('div');
   el.id = 'result'; el.hidden = true;
-  el.innerHTML = '<div class="head"><div class="big"></div><div class="rank"><b></b><small>評價 RANK</small></div></div><div class="en"></div><div class="stats"></div><div class="best"></div><div class="xpgain"></div><div class="loot"></div><div class="btns"><button data-a="retry">再戰<small>RETRY · Enter</small></button><button data-a="menu">選將<small>HEROES · Esc</small></button><button data-a="go">繼續<small>CONTINUE</small></button></div>';
+  el.innerHTML = '<div class="head"><div class="big"></div><div class="rank"><b></b><small>評價 RANK</small></div></div><div class="en"></div><div class="stats"></div><div class="best"></div><div class="xpgain"></div><div class="loot"></div><div class="btns"><button data-a="next">下一章<small>NEXT CHAPTER</small></button><button data-a="retry">再戰<small>RETRY · Enter</small></button><button data-a="menu">選將<small>HEROES · Esc</small></button><button data-a="go">繼續<small>CONTINUE</small></button></div>';
   document.body.appendChild(el);
   const big = el.querySelector('.big'), rankEl = el.querySelector('.rank'), rankB = el.querySelector('.rank b');
   const en = el.querySelector('.en'), stats = el.querySelector('.stats'), best = el.querySelector('.best'), cont = el.querySelector('[data-a="go"]');
-  const xpEl = el.querySelector('.xpgain'), lootEl = el.querySelector('.loot');
+  const xpEl = el.querySelector('.xpgain'), lootEl = el.querySelector('.loot'), nextB = el.querySelector('[data-a="next"]'), menuB = el.querySelector('[data-a="menu"]');
   let maxCombo = 0, open = false, t0 = 0, loot = [], paid = false;
   on('hit', () => { maxCombo = Math.max(maxCombo, game.hero.combo); });
   on('scenario', () => { maxCombo = 0; loot = []; paid = false; });
@@ -147,7 +156,12 @@ const result = (() => {
   const show = (win, delay, clear = null) => setTimeout(() => {
     if (open || (!win && game.hero.state !== 'dead')) return;
     big.textContent = win ? '勝利' : '戰死'; en.textContent = win ? `VICTORY · ${STAGE.en}` : 'FALLEN IN BATTLE';
-    el.classList.toggle('win', win); cont.hidden = !win;
+    el.classList.toggle('win', win); cont.hidden = !win || !!CH;
+    nextB.hidden = !(CH && win);
+    if (CH) {
+      nextB.innerHTML = nextChapter(CH) ? '下一章<small>NEXT CHAPTER · Enter</small>' : '終章<small>EPILOGUE · Enter</small>'; menuB.innerHTML = '劇情<small>STORY · Esc</small>';
+      el.querySelector('[data-a="retry"]').innerHTML = win ? '再戰<small>RETRY</small>' : '再戰<small>RETRY · Enter</small>';
+    }
     const time = clear ? clear.time : (game.frame - t0) / 60;
     stats.innerHTML = `<span>擊破 <b>${game.hero.kos}</b></span><span>最大連擊 <b>${maxCombo}</b></span><span>時間 <b>${clock(time)}</b></span><span>難度 <b>${game.diff.zh}</b></span>`;
     rankEl.hidden = !clear; best.textContent = '';
@@ -155,6 +169,7 @@ const result = (() => {
       const rank = rankOf({ ...clear, hpMax: game.hero.hpMax }, STAGE.par);
       rankB.textContent = rank; rankEl.dataset.r = rank;
       const isNew = keepBest(STAGE.id, HERO.id, { rank, time: Math.round(time), kos: clear.kos, combo: maxCombo, diff: game.diff.id });
+      if (CH) storyWon(CH.id, rank);
       const b = bestOf(STAGE.id, HERO.id);
       best.innerHTML = isNew ? '<em>新紀錄</em> NEW RECORD' : `最佳紀錄 BEST · <b>${b.rank}</b> · ${clock(b.time)} · ${DIFFS[b.diff]?.zh || ''}`;
       paintBest();
@@ -176,8 +191,11 @@ const result = (() => {
   on('stage:clear', (e) => show(true, 1600, e));
   const act = (a) => {
     if (!open) return;
-    if (a === 'retry') start();
-    else if (a === 'menu') { start(); setPaused(true); }
+    if (a === 'next') {                                      // story: the scene after the battle, then the next chapter
+      r.hide(); setPaused(true); menu.hidden = true;
+      cine.play(CH, 'post', () => { const nx = nextChapter(CH); if (nx) playChapter(nx); else { setPaused(true); storyMenu.open(); } });
+    } else if (a === 'retry') start();
+    else if (a === 'menu') { start(); setPaused(true); if (CH) storyMenu.open(); }
     else { r.hide(); }
   };
   el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { e.stopPropagation(); act(b.dataset.a); } });
@@ -235,6 +253,15 @@ const heroCards = HEROES.map((h) => { const b = card('heroes', h === HERO, `<can
 function paintLv() { HEROES.forEach((h, k) => { heroCards[k].querySelector('.lvb').textContent = `Lv ${heroP(h.id).lv}`; }); }
 paintLv();
 const armory = createArmory({ onChange: () => applyGear(true) });
+const cine = createCutscene();
+/** Story: go to a chapter — its stage with its officer (the page reloads: stages and models are built at boot). */
+function playChapter(ch) {
+  const q = new URLSearchParams({ stage: ch.stage, hero: ch.hero, story: ch.id });
+  for (const k of ['q', 'touch', 'look']) if (params.has(k)) q.set(k, params.get(k));   // keep the viewer's own choices, drop debug ones
+  location.search = q;
+}
+const storyMenu = createStoryMenu({ onPlay: playChapter });
+document.getElementById('storyBtn').addEventListener('click', (e) => { e.stopPropagation(); storyMenu.open(); });
 document.getElementById('arm').addEventListener('click', (e) => { e.stopPropagation(); armory.open(); });
 const stageCards = STAGES.map((s) => card('stages', s === STAGE, `<span><b>${s.zh}</b><small>${s.time} · ${s.enemy.army}</small></span><i class="rk"></i>`, () => pickStage(s.id)));
 /** Best rank of the chosen hero on each battle card. */
@@ -290,7 +317,12 @@ go.addEventListener('click', () => {
   }
 });
 addEventListener('keydown', (e) => {
-  if (result.open) { if (e.code === 'Enter' || e.code === 'NumpadEnter') result.act('retry'); else if (e.code === 'Escape') result.act('menu'); return; }
+  if (result.open) {
+    if (e.code === 'Enter' || e.code === 'NumpadEnter') result.act(CH && document.querySelector('#result [data-a="next"]').hidden === false ? 'next' : 'retry');
+    else if (e.code === 'Escape') result.act('menu');
+    return;
+  }
+  if (cine.on) return;                                       // the cutscene has the keys
   if (e.code === 'Escape') setPaused(!paused);
   else if (paused && (e.code === 'Enter' || e.code === 'NumpadEnter')) setPaused(false);
   else if (paused && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
@@ -328,7 +360,11 @@ const frame = (now) => {
   acc += Math.min(0.1, raw);
   last = now;
   govern(Math.min(0.25, raw));
-  if (paused) { acc = 0; input.sample(); return; }
+  if (paused) {
+    acc = 0; input.sample();
+    if (cine.on) { cine.tick(Math.min(0.1, raw)); render(); }   // story scene: the field flies by while the sim waits
+    return;
+  }
   let n = 0;
   while (acc >= 1 / 60 && n < 4) { step(); acc -= 1 / 60; n++; }
   if (n === 4) acc = 0;
@@ -338,6 +374,10 @@ const frame = (now) => {
 start();
 setPaused(!PREVIEW);
 if (PREVIEW) document.getElementById('hud').hidden = true;
+if (CH && !PREVIEW) {                                              // story chapter: its opening scene, then straight into battle
+  menu.hidden = true;
+  cine.play(CH, 'pre', () => setPaused(false));
+}
 render();
 post.warm(scene, camRig.camera);
 const boot = document.getElementById('boot');                     // the boot screen (index.html) fades out

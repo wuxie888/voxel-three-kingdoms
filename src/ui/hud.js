@@ -15,7 +15,7 @@ import { RARITY } from '../progress/loot.js';
 import { ST } from '../crowd/crowd.js';
 import { ARENA_RADIUS, WALL_Z, GATE_X } from '../world/world.js';
 
-const OFFICERS = STAGE.enemy.officers.map((o, i) => (i === 3 && STAGE.enemy.swap?.[HERO.id]) || o);   // the hero never fights himself
+const OFFICERS = STAGE.enemy.officers;                         // four tags; the names come from game.crowd.names (a script may rename a slot)
 const OPEN = STAGE.lines[HERO.id] || HERO.lines.open;
 /** Paint a hero's 20×20 pixel portrait into a canvas. */
 export function paintPortrait(cv, hero = HERO) {
@@ -60,7 +60,7 @@ export function createHud(root, game, { camera = null } = {}) {
   const ways = $$('.h-ways .way').map((el) => ({ el, i: el.querySelector('i'), b: el.querySelector('b'), sp: el.querySelector('span') }));
   const target = $('.h-target'), targetB = $('.h-target b'), targetS = $('.h-target span'), targetI = $('.h-target .bar i'), targetE = $('.h-target .bar em');
   const offs = $$('.off').map((el) => ({ el, bd: el.querySelector('.bd'), mk: el.querySelector('.mk'), ld: el.querySelector('.ld'),
-    bar: el.querySelector('.bar i'), lagEl: el.querySelector('.bar em'), lag: 1 }));
+    bar: el.querySelector('.bar i'), lagEl: el.querySelector('.bar em'), lag: 1, nb: el.querySelector('.bd b'), ns: el.querySelector('.bd span') }));
   const moraleI = $('.morale i'), mapEl = $('.h-map');
   const mapCv = $('.h-map canvas'), map = mapCv.getContext('2d');
   $$('canvas[width="20"]').forEach((cv) => paintPortrait(cv));
@@ -69,7 +69,7 @@ export function createHud(root, game, { camera = null } = {}) {
   const speaker = (who) => {
     if (who === 'ally' && cp?.ally) who = cp.ally.id;
     if (who === 'boss' && game.boss) return { def: game.boss.def, side: 'foe' };
-    if (who.startsWith('off:')) { const [zh, en] = OFFICERS[+who.slice(4)]; return { zh, en, side: 'foe' }; }
+    if (who.startsWith('off:')) { const [zh, en] = game.crowd.names[+who.slice(4)]; return { zh, en, side: 'foe' }; }
     const def = who === 'hero' ? HERO : HEROES.find((x) => x.id === who) || HERO;
     return { def, side: def === HERO ? 'hero' : 'ally' };
   };
@@ -107,7 +107,11 @@ export function createHud(root, game, { camera = null } = {}) {
   const goalText = (g) => forHero(g.goal) || ['', ''];
   on('say', (e) => { if (S.dlgQ.length < 4) S.dlgQ.push({ zh: e.zh, en: e.en, dur: 250, who: e.who }); });
   on('goal:start', (e) => { const [zh, en] = goalText(e.goal); banner(`<b class="gl">目標</b>${zh}`, `Objective — ${en}`, 170); S.goalF = game.frame; });
-  on('goal:progress', (e) => { if (e.goal === undefined && cp?.goal?.kind === 'reach' && cp.of > 1) banner(`${cp.goal.label} <em>${e.n} / ${e.of}</em>`, `${e.n} of ${e.of}`, 110); });
+  on('goal:progress', (e) => {
+    const k = cp?.goal?.kind;
+    if ((k === 'reach' || k === 'destroy') && cp.of > 1) banner(`${cp.goal.label}${k === 'destroy' ? ' 破壞' : ''} <em>${e.n} / ${e.of}</em>`, `${e.n} of ${e.of}`, 110);
+  });
+  on('flood', () => banner('<em>水淹七軍</em>', 'The Han breaks its banks — the seven armies are swept away', 200));
   on('goal:done', (e) => { if (e.goal.kind !== 'officer') banner(`${goalText(e.goal)[0]} <em>達成</em>`, 'Objective complete', 140); });
   on('buff', () => banner('奪得 <em>青釭劍</em> · 攻擊力上昇', 'The Qinggang sword — attack up', 160));
   // supplies: what he just took, over his feet (food shows the HP it gave back)
@@ -131,7 +135,7 @@ export function createHud(root, game, { camera = null } = {}) {
   on('attack:start', () => { S.actF = game.frame; });
   on('ko', (e) => {
     if (!e.officer) return;
-    const [zh, en] = OFFICERS[(e.i - game.crowd.grunts) % OFFICERS.length];
+    const [zh, en] = game.crowd.names[(e.i - game.crowd.grunts) % OFFICERS.length];
     banner(`敵將 <em>${zh}</em> 擊破！`, `Enemy officer ${en.replace(/\b(\w)(\w*)/g, (m, a, b) => a + b.toLowerCase())} defeated!`, 150);
     S.tgt = e.i; S.tgtKoF = game.frame;
   });
@@ -317,7 +321,8 @@ export function createHud(root, game, { camera = null } = {}) {
       if (cp?.goal && camera && !inMusou) {
         const g = cp.goal;
         if (g.kind === 'reach') g.points.forEach(([x, z], j) => { if (cp.caps[j] < 1) wt.push({ x, y: 3.4, z, label: g.label, spot: true }); });
-        else if (g.kind === 'officer') cp.ofs.forEach((i) => { if (!c.kod[i] && c.st[i] !== ST.OFF) wt.push({ x: c.x[i], y: 2.6, z: c.z[i], label: OFFICERS[i - c.grunts][0] }); });
+        else if (g.kind === 'destroy') cp.tgt.forEach((t) => { if (t.hp > 0) wt.push({ x: t.x, y: 4.6, z: t.z, label: `${g.label} ${Math.ceil(t.hp / t.hpMax * 100)}%`, spot: true }); });
+        else if (g.kind === 'officer') cp.ofs.forEach((i) => { if (!c.kod[i] && c.st[i] !== ST.OFF) wt.push({ x: c.x[i], y: 2.6, z: c.z[i], label: c.names[i - c.grunts][0] }); });
         else if (g.kind === 'boss' && game.boss?.alive()) wt.push({ x: game.boss.x, y: 3.2, z: game.boss.z, label: game.boss.def.zh });
       }
       ways.forEach((w, k) => {
@@ -357,7 +362,7 @@ export function createHud(root, game, { camera = null } = {}) {
       const tKo = tg >= 0 && f - S.tgtKoF < 70 && tg === S.tgt;
       set(target, 'opacity', tg >= 0 && introA < 0.5 ? (tKo ? clamp01((70 - (f - S.tgtKoF)) / 20) : 1).toFixed(2) : '0');
       if (tg >= 0) {
-        const [zh, en] = OFFICERS[(tg - c.grunts) % OFFICERS.length];
+        const [zh, en] = c.names[(tg - c.grunts) % OFFICERS.length];
         text(targetB, zh); text(targetS, en);
         const th = clamp01(c.hp[tg] / c.hpMax[tg]);
         set(targetI, 'transform', `scaleX(${th.toFixed(4)})`);
@@ -391,6 +396,7 @@ export function createHud(root, game, { camera = null } = {}) {
       offs.forEach((o, j) => {
         const i = c.grunts + j;
         o.show = false;
+        text(o.nb, c.names[j][0]); text(o.ns, c.names[j][1]);
         if (!camera || i >= c.N || c.st[i] === ST.OFF || c.st[i] === ST.DEAD) return;
         const dist = Math.hypot(c.x[i] - h.x, c.z[i] - h.z);
         if (dist >= game.hudTagR) return;                               // faded out (alpha < 0.05)
@@ -495,8 +501,8 @@ export function createHud(root, game, { camera = null } = {}) {
       }
       if (cp?.goal) {
         const pulse = 0.5 + 0.5 * Math.sin(f * 0.12), pin = (v) => Math.max(7, Math.min(193, v));
-        if (cp.goal.kind === 'reach') cp.goal.points.forEach(([x, z], j) => {
-          if (cp.caps[j] >= 1) return;
+        if (cp.goal.kind === 'reach' || cp.goal.kind === 'destroy') cp.goal.points.forEach(([x, z], j) => {
+          if (cp.goal.kind === 'reach' ? cp.caps[j] >= 1 : cp.tgt[j].hp <= 0) return;
           const px2 = pin(X(x)), py2 = pin(Y(z));
           map.strokeStyle = `rgba(255,214,90,${(0.3 + 0.5 * pulse).toFixed(2)})`; map.lineWidth = 2;
           map.beginPath(); map.arc(px2, py2, 8 + pulse * 6, 0, 7); map.stroke();

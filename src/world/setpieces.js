@@ -5,6 +5,10 @@
 //   'pass'   虎牢關 — towering rock walls on both flanks that close in on the gate: a pass funnelling to Hulao.
 //   'stream' 長坂坡 — a shallow stream behind the field with 長坂橋 across it (where the stage script's ally waits), and
 //                   the dry well where Liu Shan hides (STAGE.props well).
+//   'altars' 黃巾之亂 — the field around the three altars of the Way of Great Peace (the altars themselves, which can be
+//                   broken, are stages/props.js): prayer-flag lines and talisman poles.
+//   'flood'  樊城 — the swollen Han behind a long earthen levee, grey rain-light on the water; the three cross-dams the
+//                   hero breaches (stages/props.js) run from the levee into the field.
 // blocked(x, z) tells the dressing where not to stand troops and banners.
 import * as THREE from 'three';
 import { makeRng } from '../core/rng.js';
@@ -14,6 +18,7 @@ import { STAGE } from '../stages/index.js';
 
 export const SET = STAGE.set || null;
 export const RIVER = { z0: 49, z1: 95 };   // the near bank just past the arena rim (46 m), in the default view
+export const LEVEE = { z0: 46.5, z1: 48.6, h: 1.9 };                // 樊城: the earthen levee in front of the river
 export const STREAM = { z0: -54, z1: -48, x: 0, deckY: 0.42 };   // 長坂坡: behind the start, past the rim; bridge at x
 const WELL = STAGE.props?.find((p) => p.kind === 'well')?.at;
 const lit = () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, flatShading: true });
@@ -23,8 +28,31 @@ function edge(s, z) {
   const far = s > 0 ? 12 : 34, u = Math.min(1, Math.max(0, (z - 40) / 60));
   return 50 + (far - 50) * u * u * (3 - 2 * u);
 }
+const PROP_AT = (STAGE.props || []).flatMap((p) => (Array.isArray(p.at[0]) ? p.at : [p.at]));
+/** Solid props (circles [x, z, r]) the hero and the soldiers walk round: the altars, the dams' faces, the well. */
+export const SOLIDS = (STAGE.props || []).flatMap((p) => {
+  const at = Array.isArray(p.at[0]) ? p.at : [p.at];
+  if (p.kind === 'altars') return at.map(([x, z]) => [x, z, 2.6]);
+  if (p.kind === 'dams') return at.flatMap(([x, z]) => [[x - 2.2, z + 1.7, 1.75], [x, z + 1.7, 1.75], [x + 2.2, z + 1.7, 1.75]]);
+  if (p.kind === 'well') return at.length ? [[at[0][0], at[0][1], 1.25]] : [];
+  return [];
+});
+/** Push a body of radius r at (x, z) out of the solids; returns the corrected [x, z] (or null when it was clear). */
+export function pushOut(x, z, r) {
+  let hit = null;
+  for (const [sx, sz, sr] of SOLIDS) {
+    const dx = x - sx, dz = z - sz, d = Math.hypot(dx, dz), R = sr + r;
+    if (d >= R) continue;
+    const k = d > 1e-6 ? R / d : 0;
+    x = d > 1e-6 ? sx + dx * k : sx + R; z = d > 1e-6 ? sz + dz * k : sz;
+    hit = [x, z];
+  }
+  return hit;
+}
 export function blocked(x, z) {
+  if (PROP_AT.some(([px, pz]) => Math.hypot(x - px, z - pz) < 5)) return true;   // nothing stands on an altar, a dam, the well
   if (SET === 'river') return z > RIVER.z0 - 3 && z < RIVER.z1 + 1;
+  if (SET === 'flood') return z > LEVEE.z0 - 3 && z < RIVER.z1 + 1;
   if (SET === 'pass') return Math.abs(x) > edge(Math.sign(x) || 1, z) - 3;
   if (SET === 'stream') {
     if (WELL && Math.hypot(x - WELL[0], z - WELL[1]) < 5) return true;
@@ -198,7 +226,50 @@ function buildStream(scene) {
   return { fires: [], update(t) { water.uTime.value = t; } };
 }
 
+// ---------------------------------------------------------------- 黃巾之亂: prayer flags and talismans
+function buildAltarField(scene) {
+  const r = makeRng(512), b = [];
+  // lines of yellow prayer flags strung between poles around the altars, and talisman poles with paper strips
+  for (const [x, z] of PROP_AT) {
+    for (let k = 0; k < 6; k++) {
+      const a = k / 6 * Math.PI * 2 + 0.3, R = 10, px = x + Math.sin(a) * R, pz = z + Math.cos(a) * R;
+      b.push({ s: [0.16, 5.6, 0.16], p: [px, 2.8, pz], c: 0x4a3220 });
+      for (let j = 0; j < 4; j++) b.push({ s: [0.06, 0.5, 0.26], p: [px, 5.2 - j * 0.55, pz], r: [0, a, 0.05 * (j - 1.5)], c: j & 1 ? 0xe8c040 : 0xd0a020 });
+      const a2 = a + Math.PI / 3, qx = x + Math.sin(a2) * R, qz = z + Math.cos(a2) * R, n = 9;
+      for (let j = 1; j < n; j++) {                                   // strung high: above the gameplay camera
+        const u = j / n, sag = Math.sin(u * Math.PI) * 0.7;
+        b.push({ s: [0.3, 0.36, 0.03], p: [px + (qx - px) * u, 5.3 - sag - 0.2, pz + (qz - pz) * u], r: [0, Math.atan2(qx - px, qz - pz) + Math.PI / 2, r.range(-0.1, 0.1)], c: j & 1 ? 0xf0d060 : 0xc89a28 });
+      }
+    }
+  }
+  const m = new THREE.Mesh(boxesGeometry(b), lit());
+  m.castShadow = true; m.receiveShadow = true;
+  scene.add(m);
+  return { fires: [], update() {} };
+}
+
+// ---------------------------------------------------------------- 樊城: the swollen Han behind its levee
+function buildFloodRiver(scene) {
+  const r = makeRng(613), b = [];
+  // earthen levee: a long bank of packed earth with a timber revetment and stakes along its crest
+  for (let x = -150; x < 150; x += 2) {
+    const h = LEVEE.h + r.range(-0.15, 0.15), d = LEVEE.z1 - LEVEE.z0;
+    b.push({ s: [2.05, h, d], p: [x, h / 2, (LEVEE.z0 + LEVEE.z1) / 2], c: shade(0x6a5640, r.range(0.8, 1.05)) });
+    b.push({ s: [2.05, 0.3, d + 0.6], p: [x, h + 0.1, (LEVEE.z0 + LEVEE.z1) / 2], c: shade(0x5a6a38, r.range(0.8, 1.1)) });   // grassy crest
+    b.push({ s: [2.0, h * 0.8, 0.14], p: [x, h * 0.4, LEVEE.z0 - 0.06], c: shade(0x4a3424, r.range(0.8, 1.1)) });              // timber facing
+    if (r.chance(0.6)) b.push({ s: [0.16, 1.1, 0.16], p: [x + r.range(-0.6, 0.6), h + 0.6, LEVEE.z0 + 0.3], r: [r.range(-0.2, 0.2), 0, r.range(-0.2, 0.2)], c: 0x3e2a1c });
+  }
+  const m = new THREE.Mesh(boxesGeometry(b), lit());
+  m.castShadow = true; m.receiveShadow = true;
+  const water = waterMesh(RIVER.z0, RIVER.z1, 0x3a4a58);
+  water.mesh.position.y = 0.9;                                         // the river runs high: brimming against the levee
+  scene.add(m, water.mesh);
+  return { fires: [], update(t) { water.uTime.value = t; } };
+}
+
 export function buildSetpiece(scene) {
+  if (SET === 'altars') return buildAltarField(scene);
+  if (SET === 'flood') return buildFloodRiver(scene);
   if (SET === 'river') return buildRiver(scene);
   if (SET === 'pass') return buildPass(scene);
   if (SET === 'stream') return buildStream(scene);

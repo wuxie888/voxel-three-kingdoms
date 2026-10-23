@@ -54,6 +54,11 @@ export const LOOKS = {
     grain: 0, rowNoise: 0, ca: 0, streak: 0, dither: 0, levels: 255, vignette: 0.05, bottom: 0.05, nearBlur: 8, farBlur: 0.2,
     edge: 0.35,
   },
+  storm: {  // 秋雨: grey rainlight, cool shade, muted colour, heavier vignette
+    exposure: 1.3, tmContrast: 3.0, sat: 0.9, shadowTint: [0.86, 0.94, 1.12], highTint: [1.02, 1.0, 0.96], tintLo: 0.02, tintHi: 0.45,
+    hazeCool: [0.12, 0.14, 0.18], hazeWarm: [0.16, 0.16, 0.17], sunGlow: [0.25, 0.27, 0.3], sunBurst: [0.02, 0.02, 0.02], skyGain: 0.42, farGain: 0.4,
+    bloom: 0.45, vignette: 0.32, bottom: 0.3, grain: 0.04,
+  },
   retro: {  // 复古像素: 16-bit chunky pixels, few colour levels
     pixel: 3, levels: 20, dither: 0.35, grain: 0, rowNoise: 0, ca: 0, streak: 0, sat: 1.3, nearBlur: 0, farBlur: 0,
     bloom: 0.25, edge: 0.7, vignette: 0.1,
