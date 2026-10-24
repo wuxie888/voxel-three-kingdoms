@@ -40,7 +40,9 @@ import { gearOf, addXP, heroP, storyWon } from './progress/profile.js';
 import { createStoryMenu, createCutscene } from './ui/story.js';
 import { chapterById, nextChapter } from './stages/story.js';
 import { DIFFS, QUALITY, settings, saveSettings, bestOf, keepBest, rankOf } from './core/settings.js';
+import { applyLang, setLang, HANS } from './core/lang.js';
 
+applyLang();                                                       // 简体 / 繁體 (core/lang.js): the page now and as the UI builds it
 const params = new URLSearchParams(location.search);
 const CH = chapterById(params.get('story'));                      // story mode: this chapter (stages/story.js)
 // graphics quality: chosen in the menu, or auto (last level the governor settled on; phones start at medium)
@@ -274,6 +276,9 @@ function playChapter(ch) {
 }
 const storyMenu = createStoryMenu({ onPlay: playChapter });
 document.getElementById('storyBtn').addEventListener('click', (e) => { e.stopPropagation(); storyMenu.open(); });
+const langBtn = document.getElementById('langBtn');                 // the other script, one click away
+langBtn.lastChild.textContent = HANS ? '繁體' : '简体';
+langBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); setLang(HANS ? 'hant' : 'hans'); });
 document.getElementById('arm').addEventListener('click', (e) => { e.stopPropagation(); armory.open(); });
 const stageCards = STAGES.map((s) => card('stages', s === STAGE, `<span><b>${s.zh}</b><small>${s.time} · ${s.enemy.army}</small></span><i class="rk"></i>`, () => pickStage(s.id)));
 /** Best rank of the chosen hero on each battle card. */

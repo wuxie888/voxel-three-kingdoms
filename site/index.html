@@ -59,9 +59,11 @@
   nav .links a:hover { color: var(--gold); }
   nav .play { padding: .45em 1.1em .4em; font-size: 1.1rem; }
   nav .soc { display: flex; gap: .7rem; }
+  nav .lang { font-size: .85rem; padding: .2em .6em; border: 1px solid rgba(239,227,207,.3); color: #d8c8ae; letter-spacing: .1em; }
+  nav .lang:hover { color: var(--gold); border-color: var(--gold); }
   nav .soc a { width: 22px; height: 22px; opacity: .75; } nav .soc a:hover { opacity: 1; }
   nav svg { width: 100%; height: 100%; fill: currentColor; }
-  @media (max-width: 860px) { nav .links { display: none; } nav .soc { margin-left: auto; } }
+  @media (max-width: 860px) { nav .links { display: none; } nav .lang { margin-left: auto; } }
 
   /* ---- hero */
   .hero { position: relative; min-height: 100svh; display: grid; align-items: center; overflow: hidden; }
@@ -175,6 +177,7 @@
 <nav id="nav"><div class="wrap">
   <a class="logo" href="#top">體素三國 <span class="seal">群英</span></a>
   <div class="links"><a href="#features">遊戲特色</a><a href="#heroes">武將</a><a href="#battles">戰役</a><a href="#story">劇情</a><a href="#news">戰報</a></div>
+  <a class="lang" id="lang" href="#" title="简体 / 繁體">繁體</a>
   <div class="soc">
     <a href="https://x.com/sciencedegens" target="_blank" rel="noopener" title="X / Twitter"><svg viewBox="0 0 24 24"><path d="M18.9 1.2h3.7l-8 9.2 9.4 12.4h-7.4l-5.8-7.6-6.6 7.6H.5l8.6-9.8L0 1.2h7.6l5.2 6.9zm-1.3 19.4h2L6.5 3.3H4.3z"/></svg></a>
     <a href="https://github.com/wuxie888/voxel-three-kingdoms" target="_blank" rel="noopener" title="GitHub"><svg viewBox="0 0 24 24"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg></a>
@@ -196,7 +199,7 @@
       <a class="btn main" href="/play/">立即出陣<small>PLAY NOW</small></a>
       <a class="btn" href="/play/?story=c1&amp;stage=huangjin&amp;hero=guanyu">劇情模式<small>STORY</small></a>
     </div>
-    <div class="note"><b>免下載</b> · 電腦、手機、平板 · 支援手柄 &nbsp;/&nbsp; No download · desktop, phone, tablet · gamepad</div>
+    <div class="note"><b>免下載</b> · 電腦、手機、平板 · 支持手柄 &nbsp;/&nbsp; No download · desktop, phone, tablet · gamepad</div>
   </div>
 </header>
 
@@ -262,6 +265,7 @@
 <section id="news"><div class="wrap">
   <div class="head reveal"><h2>戰報</h2><small>Updates</small><p>持續更新中：新武將、新戰役、新玩法。</p></div>
   <div class="news reveal">
+    <div class="nw"><time>2026 · 10 · 24</time><div><h3>簡體中文</h3><p>官網與遊戲默認顯示簡體，港澳台自動繁體，隨時一鍵切換。</p></div></div>
     <div class="nw"><time>2026 · 10 · 24</time><div><h3>兵種與戰馬</h3><p>弓兵、大盾兵、騎兵登場；按 U 召喚戰馬，馬上作戰、衝撞敵陣，空馬也能搶來騎。官網上線。</p></div></div>
     <div class="nw"><time>2026 · 10 · 23</time><div><h3>大戰場與據點</h3><p>戰場擴大四倍，每處五座敵營，每章七、八個目標；全圖、疾走。</p></div></div>
     <div class="nw"><time>2026 · 10 · 23</time><div><h3>蜀漢演義 · 新戰役</h3><p>五章劇情模式；新增黃巾之亂與樊城（水淹七軍）。</p></div></div>
@@ -272,7 +276,7 @@
 
 <div class="join">
   <h2>群英集結</h2>
-  <p>關注作者獲取更新，或到 GitHub 看原始碼。<br>Follow for updates, or read the source on GitHub.</p>
+  <p>關注作者獲取更新，或到 GitHub 看源碼。<br>Follow for updates, or read the source on GitHub.</p>
   <div class="cta">
     <a class="btn main" href="/play/">立即出陣<small>PLAY NOW</small></a>
     <a class="soc" href="https://x.com/sciencedegens" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.9 1.2h3.7l-8 9.2 9.4 12.4h-7.4l-5.8-7.6-6.6 7.6H.5l8.6-9.8L0 1.2h7.6l5.2 6.9zm-1.3 19.4h2L6.5 3.3H4.3z"/></svg>@sciencedegens</a>
@@ -281,9 +285,30 @@
 </div>
 <footer>
   © 2026 體素三國 Voxel Three Kingdoms · 作者 <a href="https://x.com/sciencedegens" target="_blank" rel="noopener">@sciencedegens</a><br>
-  以 MIT 授權的 voxel-musou（BubuAi）為基礎開發 · 使用 <a href="https://threejs.org" target="_blank" rel="noopener">Three.js</a> · <a href="https://github.com/wuxie888/voxel-three-kingdoms" target="_blank" rel="noopener">原始碼</a>
+  以 MIT 授權的 voxel-musou（BubuAi）為基礎開發 · 使用 <a href="https://threejs.org" target="_blank" rel="noopener">Three.js</a> · <a href="https://github.com/wuxie888/voxel-three-kingdoms" target="_blank" rel="noopener">源碼</a>
 </footer>
 <script>
+  // 简体 / 繁體: written in 繁體, shown in 简体 through the game's character map (tools/build.mjs fills T2S in from
+  // src/core/hans-map.js); the choice is the game's own setting (same origin)
+  (() => {
+    const T2S = '/*T2S*/', KEY = 'vtk:settings';
+    let st = {}; try { st = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch {}
+    const lang = st.lang === 'hans' || st.lang === 'hant' ? st.lang : (navigator.languages || [navigator.language || '']).some((x) => /^zh-(tw|hk|mo)\b|hant/i.test(x)) ? 'hant' : 'hans';
+    const btn = document.getElementById('lang');
+    btn.textContent = lang === 'hans' ? '繁體' : '简体';
+    btn.addEventListener('click', (e) => { e.preventDefault(); st.lang = lang === 'hans' ? 'hant' : 'hans'; try { localStorage.setItem(KEY, JSON.stringify(st)); } catch {} location.reload(); });
+    document.documentElement.lang = lang === 'hans' ? 'zh-Hans' : 'zh-Hant';
+    if (lang !== 'hans' || T2S.length < 4) return;
+    const M = new Map(); for (let i = 0; i < T2S.length; i += 2) M.set(T2S[i], T2S[i + 1]);
+    const tr = (s) => s.replace(/[\u3400-\u9fff\uf900-\ufaff]/g, (c) => M.get(c) || c);
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) if (n.parentNode.nodeName !== 'SCRIPT') n.data = tr(n.data);
+    for (const el of document.querySelectorAll('[alt],[title]')) for (const a of ['alt', 'title']) if (el.hasAttribute(a)) el.setAttribute(a, tr(el.getAttribute(a)));
+    document.title = tr(document.title);
+    const f = document.createElement('style');
+    f.textContent = '@font-face { font-family: "HudBrush"; src: url(/fonts/brush-sc.woff2) format("woff2"); font-display: swap; }';
+    document.head.appendChild(f);
+  })();
   const nav = document.getElementById('nav');
   const solid = () => nav.classList.toggle('solid', scrollY > 40);
   addEventListener('scroll', solid, { passive: true }); solid();

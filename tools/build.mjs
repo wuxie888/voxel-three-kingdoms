@@ -29,12 +29,18 @@ const n0 = html.length;
 html = html.replace(/<script type="importmap">[\s\S]*?<\/script>\n/, '').replace('src="./src/main.js"', `src="./${name}"`);
 if (html.length === n0 || !html.includes(name)) throw new Error('index.html: importmap / entry script not found');
 fs.writeFileSync(path.join(out, 'index.html'), html);
-for (const f of ['icon.png', 'og.jpg', 'src/ui/brush.woff2']) {
+for (const f of ['icon.png', 'og.jpg', 'src/ui/brush.woff2', 'src/ui/brush-sc.woff2']) {
   fs.mkdirSync(path.dirname(path.join(out, f)), { recursive: true });
   fs.copyFileSync(path.join(root, f), path.join(out, f));
 }
-// the official site: site/ as it is, plus the share card and the icon at the root
+// the official site: site/ as it is (with the 繁 → 简 map filled in), plus the share card and the icon at the root
 fs.cpSync(path.join(root, 'site'), site, { recursive: true });
+{
+  const t2s = fs.readFileSync(path.join(root, 'src/core/hans-map.js'), 'utf8').match(/T2S = '([^']*)'/)[1];
+  const f = path.join(site, 'index.html'), h = fs.readFileSync(f, 'utf8');
+  if (!h.includes("'/*T2S*/'")) throw new Error('site/index.html: T2S placeholder not found');
+  fs.writeFileSync(f, h.replace("'/*T2S*/'", `'${t2s}'`));
+}
 for (const f of ['icon.png', 'og.jpg']) fs.copyFileSync(path.join(root, f), path.join(site, f));
 // macOS leaves AppleDouble "._*" files beside everything written to exFAT / FAT drives (like this repo's): not shipped
 const sweep = (d) => { for (const f of fs.readdirSync(d)) { const p = path.join(d, f); if (f.startsWith('._')) fs.rmSync(p); else if (fs.statSync(p).isDirectory()) sweep(p); } };

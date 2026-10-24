@@ -17,6 +17,7 @@ import { sculpt, shade, boxesGeometry } from '../core/voxel.js';
 import { ST, KIND, CROWD } from './crowd.js';
 import { buildHorseGeometries, gait, strideHz, HORSE_DIM, COATS, FIELD_COATS } from '../horse/model.js';
 import { STEED } from '../hero/mount.js';
+import { t as tr } from '../core/lang.js';
 import { patchHitMaterial, hitAttr, hitGlow, recoilPose } from '../combat/hitfx.js';   // hit-impact: victim flash/tint + recoil pose
 import { fadeOccluder, FADE, lensSide } from '../camera/occlusion.js';   // camera part: soldiers between camera and hero dither out
 
@@ -202,7 +203,7 @@ function flagTexture() {
   g.fillStyle = '#1a0f0c';
   g.font = 'bold 44px "Xingkai SC","STXingkai","Kaiti SC","STKaiti","KaiTi","Songti SC",serif';
   g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(STAGE.enemy.ch, 32, 46);
+  g.fillText(tr(STAGE.enemy.ch), 32, 46);
   g.globalCompositeOperation = 'destination-out';                                    // swallow-tail bottom
   g.beginPath(); g.moveTo(14, 112); g.lineTo(32, 88); g.lineTo(50, 112); g.fill();
   const t = new THREE.CanvasTexture(c);

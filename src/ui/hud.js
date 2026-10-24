@@ -13,6 +13,7 @@ import { forHero } from '../stages/campaign.js';
 import { ITEMS, BUFF } from '../supplies/supplies.js';
 import { RARITY } from '../progress/loot.js';
 import { ST, KIND } from '../crowd/crowd.js';
+import { t as tr } from '../core/lang.js';
 import { ARENA_RADIUS, WALL_Z, GATE_X } from '../world/world.js';
 
 const OFFICERS = STAGE.enemy.officers;                         // four tags; the names come from game.crowd.names (a script may rename a slot)
@@ -148,7 +149,7 @@ export function createHud(root, game, { camera = null } = {}) {
   });
   on('scenario', () => { S.shieldTip = 0; S.horseTip = 0; S.cavF = -1e9; });
   on('crowd:wave', (e) => {
-    if (game.frame - S.waveF > 600) { S.waveF = game.frame; banner(`<em>${STAGE.enemy.army}</em>援兵 到着`, `${STAGE.enemy.en} reinforcements have arrived!`, 130); }
+    if (game.frame - S.waveF > 600) { S.waveF = game.frame; banner(`<em>${STAGE.enemy.army}</em>援軍 抵達`, `${STAGE.enemy.en} reinforcements have arrived!`, 130); }
     S.waves.push({ x: e.x, z: e.z, f: game.frame });
   });
   on('hit', (e) => { S.actF = game.frame; if (e.officer) { S.tgt = e.i; S.tgtF = game.frame; } });
@@ -165,7 +166,7 @@ export function createHud(root, game, { camera = null } = {}) {
   addEventListener('keydown', (e) => { if (e.code === 'KeyH') showKeys = !(showKeys ?? true); });
 
   const set = (el, prop, v) => { if (el.style[prop] !== v) el.style[prop] = v; };
-  const text = (el, v) => { v = String(v); if (el.textContent !== v) el.textContent = v; };
+  const text = (el, v) => { v = tr(String(v)); if (el.textContent !== v) el.textContent = v; };   // in the shown script: no rewrite every frame
   const clamp01 = (v) => Math.max(0, Math.min(1, v));
   const mileOf = (n) => (n < 50 ? (n >= 25 ? 25 : 0) : Math.floor(n / 50) * 50);   // last KO milestone reached
   const v3 = new Vector3();
@@ -515,7 +516,7 @@ export function createHud(root, game, { camera = null } = {}) {
         map.fillStyle = '#d0a040';
         map.beginPath(); map.moveTo(gx, 3); map.lineTo(gx - 5, 10); map.lineTo(gx + 5, 10); map.fill();
         map.font = '700 15px "Xingkai SC", "Kaiti SC", "HudBrush", serif'; map.textAlign = 'center'; map.fillStyle = 'rgba(236,214,172,0.9)';
-        map.fillText('城門', gx, 26);
+        map.fillText(tr('城門'), gx, 26);
       }
       S.waves = S.waves.filter((w) => f - w.f < 120);
       for (const w of S.waves) {

@@ -148,6 +148,10 @@ python3 -m http.server 8000
 
 线上版本用的是打包版：`npm i` 之后运行 `npm run build`，把整个游戏打包成一个压缩并带内容哈希的 `game-<hash>.js`，加上 `index.html` 和资源文件放在 `/play/` 下；网站根目录是官网（`site/`：首页、截图、宣传短片、标题字体），输出为 Vercel 的 prebuilt 格式（`.vercel/output`）。旧链接 `/?stage=…&hero=…` 会自动跳到 `/play/`。`npm run deploy` 会先打包，再执行 `vercel deploy --prebuilt --prod`。源码目录不经打包也能直接运行（本地开发时游戏就在根目录）。
 
+## 文字
+
+默认显示**简体中文**；浏览器语言是台湾、香港、澳门时默认**繁体**。标题页右上角「文字」按钮可以随时切换，官网和游戏共用这个设置。文本按繁体书写，简体由字表转换（`src/core/hans-map.js`，用 `node tools/hans.mjs` 重新生成，依赖 opencc-js）。毛笔标题字体：繁体用 Yuji Boku，简体用马善政楷书（Ma Shan Zheng，OFL），都只截取界面用到的字。
+
 ## 操作
 
 | 动作 | 按键 |
@@ -208,6 +212,6 @@ tools/          build.mjs（部署打包：官网 + /play/ 游戏）、record/�
 - 基于 BubuAi 的 [Voxel Musou](https://github.com/mike007jd/voxel-musou)（MIT）。战斗、人群 AI、镜头、特效、后处理和音频系统都来自原作。
 - 代码：MIT 许可，见 [LICENSE](LICENSE)。
 - [three.js](https://threejs.org/)：MIT 许可。
-- HUD 备用字体 `src/ui/brush.woff2` 和官网标题字体 `site/fonts/brush.woff2` 都是 Yuji Boku（Kinuta Font Factory）的子集，采用 SIL Open Font License 1.1 授权。
+- HUD 备用字体 `src/ui/brush.woff2` 和官网标题字体 `site/fonts/brush.woff2` 都是 Yuji Boku（Kinuta Font Factory）的子集；简体用的 `src/ui/brush-sc.woff2`、`site/fonts/brush-sc.woff2` 是马善政楷书（Ma Shan Zheng）的子集；都采用 SIL Open Font License 1.1 授权。
 
 本项目为同人作品，与 KOEI TECMO 无关，也未获其认可。“真·三国无双 / Dynasty Warriors” 是 KOEI TECMO 的商标。本项目不包含任何原作游戏素材。

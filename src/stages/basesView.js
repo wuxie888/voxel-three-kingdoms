@@ -7,6 +7,7 @@ import { STAGE } from './index.js';
 import { boxesGeometry, shade } from '../core/voxel.js';
 import { makeRng } from '../core/rng.js';
 import { BASE } from './bases.js';
+import { t as tr } from '../core/lang.js';
 
 const lit = () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
 
@@ -16,7 +17,7 @@ function flagTex(ch, bg, fg, rim) {
   g.fillStyle = bg; g.fillRect(0, 0, 96, 160);
   g.fillStyle = rim; g.fillRect(0, 0, 96, 8); g.fillRect(0, 0, 6, 160); g.fillRect(90, 0, 6, 160);
   g.fillStyle = fg; g.font = 'bold 64px "Xingkai SC","STXingkai","Kaiti SC","STKaiti","KaiTi",serif';
-  g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(ch, 48, 74);
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(tr(ch), 48, 74);
   g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.moveTo(20, 160); g.lineTo(48, 128); g.lineTo(76, 160); g.fill();
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter;
   return t;
